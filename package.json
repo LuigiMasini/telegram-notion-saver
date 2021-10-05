@@ -1,0 +1,25 @@
+{
+  "name": "telegram-notion-saver",
+  "version": "0.1",
+  "description": "Telegram bot to save content to notion database",
+  "main": "src/index.js",
+  "repository": "https://github.com/LuigiMasini/telegram-notion-saver.git",
+  "author": "Luigi Masini <luigimasini.lm@gmail.com>",
+  "license": "MIT",
+  "private": false,
+  "type":"module",
+  "scripts": {
+    "start": "npx nodemon -r dotenv/config src/index.js"
+  },
+  "dependencies": {
+    "@notionhq/client": "^0.3.2",
+    "dotenv": "^10.0.0",
+    "html-metadata-parser": "^2.0.2",
+    "http-terminator": "^3.0.3",
+    "mysql2": "^2.3.0",
+    "telegraf": "^4.4.2"
+  },
+  "devDependencies": {
+    "ngrok": "^4.2.2"
+  }
+}
