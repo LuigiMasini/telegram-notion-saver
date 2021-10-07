@@ -15,29 +15,19 @@ function start(){
 	
 	if (db){
 		
-		//connect mysql client
-		db.connect((err)=>{
+		//launch server
+		onBoardingServer.start(err=>{
 			
-			//check mysql client
+			//check server
 			if (err)
-				throw new Error("Can't connect to mysql server: \nerror code: "+err.code+"\nerrno: "+err.errno)
+				throw new Error ("Https server cn't start: "+err)
 			
-			debugLog('mysql client connected to server')
+			debugLog('https server started')
 			
-			//launch server
-			onBoardingServer.start(err=>{
-				
-				//check server
-				if (err)
-					throw new Error ("Https server cn't start: "+err)
-				
-				debugLog('https server started')
-				
-				//start bot
-				bot.launch().then(()=>debugLog('telegram bot launched'))
-				
-				
-			})
+			//start bot
+			bot.launch().then(()=>debugLog('telegram bot launched\n'))
+			
+			
 		})
 	}
 	else{

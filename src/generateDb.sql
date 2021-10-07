@@ -40,7 +40,9 @@ CREATE TABLE IF NOT EXISTS NotionPages (
 	`notionPageId` CHAR(36) NOT NULL,
 	`workspaceId` INT UNSIGNED NOT NULL,		-- -> NotionWorkspaces.id
 	`pageType` ENUM("db", "pg") NULL,
--- TODO	`icon`
+	`icon` CHAR(255),
+	`chatId` INT UNSIGNED NOT NULL,			-- -> TelegramChats.id
+	`title` CHAR(255),
 	PRIMARY KEY (`id`)
 ) ENGINE=InnoDB;
 
@@ -75,6 +77,7 @@ CREATE TABLE IF NOT EXISTS Templates (
 	`pageId` INT UNSIGNED NULL,			-- -> NotionPages.id
 	`userTemplateNumber` TINYINT UNSIGNED NOT NULL,
 	`imageDestination` TINYINT UNSIGNED NULL,	-- -> ImageDestinations.id
+	`chatId` INT UNSIGNED NOT NULL,			-- -> TelegramChats.id
 	PRIMARY KEY (`id`)
 ) ENGINE=InnoDB;
 

@@ -7,7 +7,7 @@
   "author": "Luigi Masini <luigimasini.lm@gmail.com>",
   "license": "MIT",
   "private": false,
-  "type":"module",
+  "type": "module",
   "scripts": {
     "start": "npx nodemon -r dotenv/config src/index.js"
   },
@@ -17,6 +17,7 @@
     "html-metadata-parser": "^2.0.2",
     "http-terminator": "^3.0.3",
     "mysql2": "^2.3.0",
+    "node-cache": "^5.1.2",
     "telegraf": "^4.4.2"
   },
   "devDependencies": {

@@ -21,5 +21,7 @@ You can switch between templates with chat buttons or with '''/use n''' where n 
 
 ## Future improvements
 
-- Multiple workspaces for users
 - Workspaces & templates can be shared between users
+- support for files, audio, stikers etc
+- multiple templates active at the same time, automatically determine which one to use looking at formats, link domains, forwarded from, is / contains file
+- a template can modify multiple pages (save same tontent to more than one location with more than one rule)

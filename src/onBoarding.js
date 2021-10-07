@@ -49,7 +49,7 @@ var server = https.createServer(options, function(req, res) {
 		//if received state param from notion
 		if ( typeof queryObject === "object" && typeof queryObject.state === "string" && queryObject.state.length && typeof parseInt(queryObject.state.slice(1 ,-1)) === "number" ){
 			
-			const chatId = parseInt(queryObject.state.slice(1 ,-1))
+			const telegramChatId = parseInt(queryObject.state.slice(1 ,-1))
 			
 			//if received temporary authorization code
 			if (typeof queryObject.code === "string" && queryObject.code.length){
@@ -77,66 +77,76 @@ var server = https.createServer(options, function(req, res) {
 				.then(response=>{
 					debugLog("Notion token response: ",response)
 					
-					db.beginTransaction(errT=>{
-						
-						!!errT && debugLog(errT)
+					
+					//start sql transaction
+					db.transactionPromise()
+					.then((connection, transactionError)=>{
 						
 						//get TelegramChats.id
-						const a = db.execute('SELECT id FROM `TelegramChats` WHERE telegramChatId = ? ', [chatId], (err1, res1)=>{
-							
-							!!err1 && debugLog(err1)
-							
-							debugLog(res1[0])
-							
-							if (!res1 || !res1.length)
-								throw new Error("Can't find saved user information")
-							
-							//register workspace, 
-							db.execute('INSERT INTO `NotionWorkspaces` (`workspaceId`, `creatorChatId`, `name`, `icon`) VALUES (?, ?, ?, ?)', [response.workspace_id, res1[0].id, response.workspace_name, response.workspace_icon], err2=>{
-								
-								/*Ignore ER_DUP_ENTRY: the workspace could be already registered by another user:
-								* https://developers.notion.com/changelog/space-level-integrations-will-be-deprecated-soon-migrate-your-oauth-flows)*
-								*/
-								if (err2 && err2.code !== 'ER_DUP_ENTRY')
-									throw new Error("Error registering workspace: "+err2.code+" - "+err2.sqlMessage)
-								
-								//get NotionWorkspaces.id of authorized workspace
-								db.execute('SELECT id FROM `NotionWorkspaces` WHERE workspaceId = ?', [response.workspace_id], (err3, res3)=>{
-									
-									!!err3 && debugLog(err3)
-									
-									//register access token for authorized workspace
-									db.execute('INSERT INTO `NotionWorkspacesCredentials` (`chatId`, `workspaceId`, `botId`, `accessToken`) VALUES (?, ?, ?, ?)', [res1[0].id, res3[0].id, response.bot_id, response.access_token], err4=>{
-										
-										if (err3 && err3.code !== 'ER_DUP_ENTRY')
-											throw new Error("Error registering workspace: "+err3.code+" - "+err3.sqlMessage)
-										
-										//TODO: if user already have templates send different message
-										const message = ()=>bot.telegram.sendMessage(chatId, "Good!\n\nNow you can set up a template with /configtemplates")
-										
-										//transaction did not start, we do not have to commit
-										if (errT)
-											message()
-										else
-											db.commit(errC=>{
-												
-												if (errC)
-													throw new Error("Error committing changes: "+errC.code+" - "+errC.sqlMessage)
-												
-												message()
-												debugLog("time elapsed: ", Date.now()-t)
-											})
-									})
-								})
-							})
-						})
+						return connection.promise(
+							'SELECT id FROM `TelegramChats` WHERE telegramChatId = ? ',
+							[telegramChatId],
+							{connection, transactionError}		//state
+						)
+					})
+					.then(({error, result, state})=>{
 						
-						console.log(a)
+						if (!result || !result.length)
+							throw new Error("Can't find saved user information")
+						
+						const chatId = result[0].id
+						
+						//register workspace, 
+						return state.connection.promise(
+							'INSERT INTO `NotionWorkspaces` (`workspaceId`, `creatorChatId`, `name`, `icon`) VALUES (?, ?, ?, ?)', 
+							[response.workspace_id, chatId, response.workspace_name, response.workspace_icon],
+							{chatId, ...state}
+						)
+					})
+					.then(({error, state})=>{
+							
+						/*Ignore ER_DUP_ENTRY: the workspace could be already registered by another user:
+						* https://developers.notion.com/changelog/space-level-integrations-will-be-deprecated-soon-migrate-your-oauth-flows
+						*/
+						if (error && error.code !== 'ER_DUP_ENTRY')
+							throw new Error("Error registering workspace: "+error.code+" - "+error.sqlMessage)
+						
+						//get NotionWorkspaces.id of authorized workspace
+						return state.connection.promise(
+							'SELECT id FROM `NotionWorkspaces` WHERE workspaceId = ?',
+							[response.workspace_id],
+							state
+						)
+					})
+					.then(({error, result, state})=>{
+						//register access token for authorized workspace
+						return state.connection.promise(
+							'INSERT INTO `NotionWorkspacesCredentials` (`chatId`, `workspaceId`, `botId`, `accessToken`) VALUES (?, ?, ?, ?)',
+							[state.chatId, result[0].id, response.bot_id, response.access_token],
+							{...state}
+						)
+					})
+					.then(({error, state})=>{
+						
+						if (error && error.code !== 'ER_DUP_ENTRY')
+							throw new Error("Error registering workspace: "+error.code+" - "+error.sqlMessage)
+						
+						return state.connection.commitPromise(state.connection)
+					})
+					.then(errC=>{
+						
+						if (errC)
+							throw new Error("Error committing changes: "+errC.code+" - "+errC.sqlMessage)
+						
+						//TODO: if user already have templates send different message
+						bot.telegram.sendMessage(telegramChatId, "Good!\n\nNow you can set up a template with /configtemplates")
+						
+						debugLog("time elapsed: ", Date.now()-t)
 					})
 				})
 				.catch(err => {
 					console.warn(err)
-					bot.telegram.sendMessage(chatId, "Error setting up your account: "+err+"\n\nYou can try again later, search the error or report the incident.")
+					bot.telegram.sendMessage(telegramChatId, "Error setting up your account: "+err+"\n\nYou can try again later, search the error or report the incident.")
 				})
 			}
 			else{
