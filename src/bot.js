@@ -16,6 +16,8 @@ const bot = new Telegraf(process.env.telegramBotToken)
 
 //TODO dare nomi meaningful a funzioni
 
+//BEGIN bot onBoarding
+
 function authorizeInNotion (ctx, again=false){
 	
 	const notionAuthorizationUrl = new URL ("https://api.notion.com/v1/oauth/authorize")
@@ -79,6 +81,8 @@ bot.start(ctx=>
 	
 )
 
+//END bot onBoarding
+
 bot.command('cancel', ctx=>cache.del(ctx.chat.id.toString()))
 
 /*TODO
@@ -95,6 +99,8 @@ instead of
 //TODO add catch & error handling in every function
 //### maybe add back button here and there in keyboards
 //NOTE in cache.set all expansions in 'value' argument should go first, or they will overwrite changes, resulting in no change at all
+
+//BEGIN config
 
 const setTextRules = (ctx) => {
 	const data = cache.get(ctx.chat.id.toString())
@@ -691,7 +697,7 @@ bot.action('addTemplate', ctx=>
 		.then(()=>addTemplate(ctx))
 	  )
 
-bot.command('configtemplates', ctx=>
+bot.command('config', ctx=>
 	//get user templates
 // 	db.promiseExecute('SELECT t.id, t.userTemplateNumber, p.pageType, p.icon, tc.id AS chatId FROM Templates AS t LEFT OUTER JOIN NotionPages AS p ON p.id=t.pageId LEFT OUTER JOIN TelegramChats AS tc ON tc.id = p.chatId WHERE tc.telegramChatId=? ORDER BY t.userTemplateNumber',[ctx.chat.id])
 	//WARNING tmp to not create a new template every time the operation will not  conclude
@@ -723,6 +729,62 @@ bot.command('configtemplates', ctx=>
 	})
 )
 
+//END config
+
+//BEGIN use
+const activateTemplate = (userTemplateNumber, ctx) => 
+	db.promiseExecute('SELECT t.id FROM Templates AS t JOIN TelegramChats as tc ON tc.id = t.chatId WHERE tc.telegramChatId=?', [ctx.chat.id])
+	.then(({error, result})=> {
+		if (!!error)
+			throw new Error ("Cannot get template id: "+error.code+" - "+error.sqlMessage)
+		
+		return db.promiseExecute('UPDATE TelegramChats SET currentTemplateId=? WHERE TelegramChats.telegramChatId=? ', [userTemplateNumber, ctx.chat.id])
+	})
+	.then(({error}) => {
+		if (!!error)
+			throw new Error (error.code+" - "+error.sqlMessage)
+		
+		return ctx.reply("Using template "+userTemplateNumber)
+	})
+	.catch(err => {
+		console.warn(err)
+		ctx.reply("Cannot use template "+userTemplateNumber+" : "+err+"\n\nYou can try again later, search the error or report the incident on GitHub.")
+})
+
+bot.action(/activateTemplate(\d+)/i, ctx => activateTemplate(ctx.match[1], ctx))
+
+bot.command("use", ctx => {
+	
+	const userTemplateNumber = ctx.message.text.split('/use ')[1]
+	
+	return db.promiseExecute('SELECT userTemplateNumber FROM Templates as t JOIN TelegramChats as tc ON tc.id = t.chatId WHERE tc.telegramChatId=?', [ctx.chat.id])
+	.then(({error, result}) => {
+		if (!!error)
+			throw new Error ("Cannot get your templates: "+error.code+" - "+error.sqlMessage)
+		if (!result.length)
+			return ctx.reply("No template found, adding a new one (use /cancel to abort)")
+			.then(() => addTemplate(ctx))
+			.then(() => activateTemplate(0, ctx))
+		
+		if (typeof userTemplateNumber === "string" && result.map(({userTemplateNumber}) => userTemplateNumber+"").includes(userTemplateNumber))
+			return activateTemplate(userTemplateNumber, ctx)
+		
+		return ctx.reply(
+			"Choose wich template to use (if you dont remember them you can use /list):",
+			Markup.inlineKeyboard([
+				...result.map(({userTemplateNumber})=>Markup.button.callback(""+userTemplateNumber, "activateTemplate"+userTemplateNumber)),
+				Markup.button.callback('+', 'addTemplate'),
+				//TODO add cancel button
+			])
+		)
+	})
+	.catch(err => {
+		console.warn(err)
+		ctx.reply(err+"\n\nYou can try again later, search the error or report the incident on GitHub.")
+	})
+})
+
+//END use
 
 export default bot
 export {Markup}
