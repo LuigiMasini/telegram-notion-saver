@@ -96,12 +96,12 @@ INSERT INTO ImageDestinations (`destinations`) VALUES ("content"), ("cover"), ("
 -- Table containing template rules
 
 CREATE TABLE IF NOT EXISTS TemplateRules (
-	`propId` INT UNSIGNED,				-- -> NotionPagesProps.id, if NOT NULL extracted portion of message will be put in this prop, else discard it
+	`propId` INT UNSIGNED,				-- -> NotionPagesProps.id, if NOT NULL extracted portion of message will be put in this prop, else if url follow urlMetaRule, else discard i
 	`templateId` INT UNSIGNED NOT NULL,		-- -> Templates.id
 	`orderNumber` TINYINT UNSIGNED,			-- if NULL put defaultValue instead of extracting from message
 	`defaultValue` CHAR,
-	`endsWith` CHAR,				-- termination string for extraction
-	`urlMetaTemplateRule` INT UNSIGNED		-- -> UrlMetaTemplateRules.id
+	`endsWith` CHAR,				-- termination string for extraction, if \n to  avoid breaking output use  replace(endsWith, '\n', '\\n') as endsWith
+	`urlMetaTemplateRule` INT UNSIGNED NULL		-- -> UrlMetaTemplateRules.id
 ) ENGINE=InnoDB;
 
 
@@ -110,7 +110,6 @@ CREATE TABLE IF NOT EXISTS TemplateRules (
 CREATE TABLE IF NOT EXISTS UrlMetaTemplateRules (
 	`id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
 	`imageDestination` TINYINT UNSIGNED NULL,	-- -> ImageDestinations.id
-	`url` INT UNSIGNED,				-- -> NotionPagesProps.id
 	`title` INT UNSIGNED,				-- -> NotionPagesProps.id
 	`description` INT UNSIGNED,			-- -> NotionPagesProps.id
 	`author` INT UNSIGNED,				-- -> NotionPagesProps.id

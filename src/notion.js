@@ -11,11 +11,11 @@ const notion = new NotionClient()
 
 
 function getAccessToken (chatId, workspaceId){
-	return db.promise('SELECT accessToken FROM `NotionWorkspacesCredentials` WHERE chatId=? AND workspaceId=?', [chatId, workspaceId])
+	return db.promiseExecute('SELECT accessToken FROM `NotionWorkspacesCredentials` WHERE chatId=? AND workspaceId=?', [chatId, workspaceId])
 }
 
 function getAccessTokenFromTelegram (telegramChatId, workspaceId){
-	return db.promise('SELECT accessToken FROM `NotionWorkspacesCredentials` as n JOIN `TelegramChats` as t on n.chatId = t.id WHERE workspaceId=? AND telegramChatId=?', [telegramChatId, workspaceId])
+	return db.promiseExecute('SELECT accessToken FROM `NotionWorkspacesCredentials` as n JOIN `TelegramChats` as t on n.chatId = t.id WHERE workspaceId=? AND telegramChatId=?', [telegramChatId, workspaceId])
 }
 
 const exportObj = {

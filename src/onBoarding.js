@@ -83,7 +83,7 @@ var server = https.createServer(options, function(req, res) {
 					.then((connection, transactionError)=>{
 						
 						//get TelegramChats.id
-						return connection.promise(
+						return connection.promiseExecute(
 							'SELECT id FROM `TelegramChats` WHERE telegramChatId = ? ',
 							[telegramChatId],
 							{connection, transactionError}		//state
@@ -97,7 +97,7 @@ var server = https.createServer(options, function(req, res) {
 						const chatId = result[0].id
 						
 						//register workspace, 
-						return state.connection.promise(
+						return state.connection.promiseExecute(
 							'INSERT INTO `NotionWorkspaces` (`workspaceId`, `creatorChatId`, `name`, `icon`) VALUES (?, ?, ?, ?)', 
 							[response.workspace_id, chatId, response.workspace_name, response.workspace_icon],
 							{chatId, ...state}
@@ -112,7 +112,7 @@ var server = https.createServer(options, function(req, res) {
 							throw new Error("Error registering workspace: "+error.code+" - "+error.sqlMessage)
 						
 						//get NotionWorkspaces.id of authorized workspace
-						return state.connection.promise(
+						return state.connection.promiseExecute(
 							'SELECT id FROM `NotionWorkspaces` WHERE workspaceId = ?',
 							[response.workspace_id],
 							state
@@ -120,7 +120,7 @@ var server = https.createServer(options, function(req, res) {
 					})
 					.then(({error, result, state})=>{
 						//register access token for authorized workspace
-						return state.connection.promise(
+						return state.connection.promiseExecute(
 							'INSERT INTO `NotionWorkspacesCredentials` (`chatId`, `workspaceId`, `botId`, `accessToken`) VALUES (?, ?, ?, ?)',
 							[state.chatId, result[0].id, response.bot_id, response.access_token],
 							{...state}
@@ -146,7 +146,7 @@ var server = https.createServer(options, function(req, res) {
 				})
 				.catch(err => {
 					console.warn(err)
-					bot.telegram.sendMessage(telegramChatId, "Error setting up your account: "+err+"\n\nYou can try again later, search the error or report the incident.")
+					bot.telegram.sendMessage(telegramChatId, "Error setting up your account: "+err+"\n\nYou can try again later, search the error or report the incident on GitHub.")
 				})
 			}
 			else{
