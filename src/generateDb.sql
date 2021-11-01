@@ -67,8 +67,8 @@ CREATE TABLE IF NOT EXISTS NotionPropTypes (
 	PRIMARY KEY (`id`)
 );
 
-INSERT IGNORE INTO NotionPropTypes (`type`) VALUES ("title"), ("rich_text"), ("number"), ("select"), ("multi_select"), ("date"), ("people"), ("files"), ("checkbox"), ("url"), ("email"), ("phone_number"), ("formula"), ("relation"), ("rollup"), ("created_time"), ("created_by"), ("last_edited_time"), ("last_edited_by");
-
+INSERT IGNORE INTO NotionPropTypes VALUES (0, "title"), (1, "rich_text"), (2, "number"), (3, "select"), (4, "multi_select"), (5, "date"), (6, "people"), (7, "files"), (8, "checkbox"), (9, "url"), (10, "email"), (11, "phone_number"), (12, "formula"), (13, "relation"), (14, "rollup"), (15, "created_time"), (16, "created_by"), (17, "last_edited_time"), (18, "last_edited_by");
+UPDATE NotionPropTypes SET id = 0 WHERE id = 20;	-- title will be inserted with id 20 instead of 0
 
 -- Table containing templates informations
 
@@ -98,9 +98,9 @@ INSERT INTO ImageDestinations (`destinations`) VALUES ("content"), ("cover"), ("
 CREATE TABLE IF NOT EXISTS TemplateRules (
 	`propId` INT UNSIGNED,				-- -> NotionPagesProps.id, if NOT NULL extracted portion of message will be put in this prop, else if url follow urlMetaRule, else discard i
 	`templateId` INT UNSIGNED NOT NULL,		-- -> Templates.id
-	`orderNumber` TINYINT UNSIGNED,			-- if NULL put defaultValue instead of extracting from message
-	`defaultValue` CHAR,
-	`endsWith` CHAR,				-- termination string for extraction, if \n to  avoid breaking output use  replace(endsWith, '\n', '\\n') as endsWith
+	`orderNumber` TINYINT UNSIGNED,
+	`defaultValue` CHAR(255),
+	`endsWith` CHAR(255),				-- termination string for extraction, if NULL use defaultValue instead of extracting, if \n to  avoid breaking output use  replace(endsWith, '\n', '\\n') as endsWith
 	`urlMetaTemplateRule` INT UNSIGNED NULL		-- -> UrlMetaTemplateRules.id
 ) ENGINE=InnoDB;
 

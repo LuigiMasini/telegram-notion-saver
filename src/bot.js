@@ -48,7 +48,7 @@ bot.action('continueReauthorization', ctx=>
 	  )
 
 bot.start(ctx=>
-	db.promiseExecuteq('INSERT INTO `TelegramChats` (`telegramChatId`,`chatType`) VALUES (?, ?)', [ctx.chat.id, ctx.chat.type])
+	db.promiseExecute('INSERT INTO `TelegramChats` (`telegramChatId`,`chatType`) VALUES (?, ?)', [ctx.chat.id, ctx.chat.type])
 	.then(({error, result})=>{
 		
 		if (error && error.code === 'ER_DUP_ENTRY')
@@ -100,12 +100,15 @@ instead of
 //### maybe add back button here and there in keyboards
 //NOTE in cache.set all expansions in 'value' argument should go first, or they will overwrite changes, resulting in no change at all
 
+//regex stole @ https://stackoverflow.com/a/41603920
+const removeDoubleQuotes = /"(.*)"/
+
 //BEGIN config
 
 const setTextRules = (ctx) => {
 	const data = cache.get(ctx.chat.id.toString())
 	
-	if (!data || ( !data.templateData.pageId && !data.pageData.id) )
+	if (!data || ( !!data.templateData && !data.templateData.pageId && !data.pageData.id) )
 		return ctx.editMessageText("We lost your cached data, please start the operation again.\n\nSorry for the incovenience")
 	
 	
@@ -113,7 +116,7 @@ const setTextRules = (ctx) => {
 	
 	return db.promiseExecute(
 		'SELECT * FROM `NotionPagesProps` WHERE pageId=?',
-		[data.templateData.pageId || data.pageData.id]		//if op:edit from template, if adding template from page
+		[data.templateData.pageId|| data.pageData.id]		//if op:edit from template, if adding template from page
 	)
 	.then(({result}) => db.promiseExecute(
 			'SELECT tr.orderNumber, pp.propName, tr.endsWith, tr.defaultValue, tr.urlMetaTemplateRule, u.title, u.imageDestination, u.siteName, u.description, u.type, u.author FROM `TemplateRules` AS tr LEFT OUTER JOIN `NotionPagesProps` AS pp ON pp.id = tr.propId LEFT OUTER JOIN `UrlMetaTemplateRules` AS u ON u.id = tr.urlMetaTemplateRule WHERE tr.templateId=? ORDER BY tr.orderNumber',
@@ -122,7 +125,7 @@ const setTextRules = (ctx) => {
 		)
 		)
 	.then(({result, state}) => ctx.replyWithMarkdown(
-			( ( !result || !result.length ) ?
+			( ( !result|| !result.length ) ?
 			"There are no rules yet for this template" :
 			"The rules for this template are:\n\n"+result.map(rule => {
 					const {orderNumber, propName, endsWith, defaultValue, title, description, author, type, siteName, imageDestination} = rule
@@ -138,7 +141,8 @@ const setTextRules = (ctx) => {
 			"\n\nTo change the rules reply to this message with the new set of rules that will replace the old ones (if any). Use the same format:\n\n"+
 			"`number - property name, string end with, property default value`\n\n"+
 			"Property names for pages are only Title and Content."+
-			"You can leave blank between commas.\nIf the value contains a comma, wrap that in \" \".\n"+
+			"You can leave blank between commas. If `string ends with` is blank, `default value` will be saved in `property name`.\n\n"+
+			"If you need to have commas or escaped characters in a field, wrap it with \", note that *if `ends with` is wrapped in \" it will be used as a regex*\n"+
 			"Numbers must be progressive.\n\n"+
 			"If it is a url that you want to parse add\n\n"+
 			"`\[ title, image, site name, description, url, type, author \]`\n\n"+
@@ -305,13 +309,19 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 	
 	if (!!data &&
 	    (
-		( !!ctx.message && !!ctx.message.reply_to_message && ctx.message.reply_to_message.message_id === data.message_id ) || 
+		( !!ctx.message && !!ctx.message.reply_to_message && ctx.message.reply_to_message.message_id === data.message_id )|| 
 		( !!ctx.update && !!ctx.update.edited_message && !!ctx.update.edited_message.reply_to_message && ctx.update.edited_message.reply_to_message.message_id === data.ed_message_id ) 
 	    ) 
 	) {
 		
 		switch(data.replyFor){
 			case 'editRule':
+				
+				const retry = err =>
+					ctx.reply(err+"\nYou can try again or /cancel\n\nThis page properties are: "+data.props.map(p=>p.propName).join(', '), Markup.forceReply())
+					.then(({message_id})=>cache.set(ctx.chat.id.toString(), {...data, message_id, ed_message_id: ctx.updateType === 'edited_message' ? data.ed_message_id : data.message_id}))	//only allow edit on users last message
+				
+				
 				try {
 					/*exampe for https://t.me/ebookfreehouse: 
 					0 - , ⁣📚*,
@@ -328,16 +338,19 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 					
 					const rows = text.split(/\n?(\d+) *- *//* match like '5 - '*/).filter(item => item.length > 1) //remove order number from capture group (\d+), will use that in future to have different parse and write order
 	// 				debugLog(rows)
+					debugLog("\n")
+					
 					const rules = rows.map(rule => {
 						const a = rule.split(/ *\[(.*)\] */)
 						
 						if (a[a.length-1] === '')
 							a.pop()
 						
-						const [one, two] = a.map(item=>item.split(/ *, */).map(str => str.length ? str.trim() : null))
+						//regex proudly stole @ https://stackoverflow.com/a/25544437
+						const [one, two] = a.map(item=>item.split(/ *,(?=(?:[^"]*"[^"]*")*[^"]*$) */g).map(str => str.length ? str.trim() : null))
+						
 						if (!!two)
 							one.push(two)
-						
 						
 						//prepare data for import
 						return one.map((item, key) => {
@@ -356,15 +369,28 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 							}
 							
 							switch (key){
-								case 0:
+								case 0: //prop name
+									
 									//prop name to prop id
-									return propNameToId(item)
-								case 1:
-								case 2:
-									//TODO ATTENTION remove " and evaluate escaped characters
+									return propNameToId(item.replace(removeDoubleQuotes, '$1'))
+									
+								case 1: //ends with
+									
+									if (!!item && item.length > 255)
+										throw new Error("Maximum length for `ends with` is 255 characters")
+									
 									return item
-								case 3:
-									//prop names to prop ids
+									
+								case 2: //default value
+									
+									if (!!item && item.length > 255)
+										throw new Error("Maximum length for `default value` is 255 characters")
+									
+									return item && item.replace(removeDoubleQuotes, '$1')
+									
+								case 3: //url rule
+									
+									//prop names to prop id s
 								
 									const urlRules = item.map(propNameToId)
 									
@@ -395,8 +421,8 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 							if (!!error)
 								throw new Error("Cannot delete old url rules: "+error.code+" - "+error.sqlMessage)
 							
-							if (!urlRules || !urlRules.length)
-								return 
+							if (!urlRules|| !urlRules.length)
+								return {}
 							
 							return connection.promiseQuery(
 								'INSERT INTO `UrlMetaTemplateRules` (title, imageDestination, siteName, description, type, author) VALUES ?', 
@@ -428,8 +454,12 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 						})
 						.then(({error}) => {
 							
-							if (!!error)
+							if (!!error){
+								
+								if (error.code === 'ER_WRONG_VALUE_COUNT_ON_ROW')
+									throw new Error("Cannot parse rules: missing a comma?")
 								throw new Error("Cannot save rules: "+error.code+" - "+error.sqlMessage)
+							}
 							
 							return  connection.commitPromise(connection)
 						})
@@ -446,15 +476,15 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 						.catch(error=>{
 							console.warn(error)
 							connection.rollbackPromise(connection)
-							return ctx.reply("Failed setting rules: \n"+error+"\n\nYou can try again later, search the error or report the incident on GitHub.")
+// 							return ctx.reply("Failed setting rules: \n"+error+"\n\nYou can try again later, search the error or report the incident on GitHub.")
+							return retry(error)
 						})
 					})
 				}
 				catch (err){
 					debugLog(err)
 					
-					ctx.reply(err+"\nYou can try again or /cancel\n\nThis page properties are: "+data.props.map(p=>p.propName).join(', '), Markup.forceReply())
-					.then(({message_id})=>cache.set(ctx.chat.id.toString(), {...data, message_id, ed_message_id: ctx.updateType === 'edited_message' ? data.ed_message_id : data.message_id}))	//only allow edit on users last message
+					return retry(err)
 				}
 				
 				break;
@@ -581,7 +611,7 @@ const preSelectWorkspace = ctx => {
 		cache.set(ctx.chat.id.toString(), {...data, workspaces:result})
 		
 		//if no workspaces authorized
-		if (!result || !result.length)
+		if (!result|| !result.length)
 			return ctx.reply("No workspace found. Add one then try again:")
 			//TODO see preceding TODO
 			.then(()=>authorizeInNotion(ctx))
@@ -733,16 +763,16 @@ bot.command('config', ctx=>
 
 //BEGIN use
 const activateTemplate = (userTemplateNumber, ctx) => 
-	db.promiseExecute('SELECT t.id FROM Templates AS t JOIN TelegramChats as tc ON tc.id = t.chatId WHERE tc.telegramChatId=?', [ctx.chat.id])
+	db.promiseExecute('SELECT t.id FROM Templates AS t JOIN TelegramChats as tc ON tc.id = t.chatId WHERE tc.telegramChatId=? AND t.userTemplateNumber=?', [ctx.chat.id, userTemplateNumber])
 	.then(({error, result})=> {
 		if (!!error)
 			throw new Error ("Cannot get template id: "+error.code+" - "+error.sqlMessage)
 		
-		return db.promiseExecute('UPDATE TelegramChats SET currentTemplateId=? WHERE TelegramChats.telegramChatId=? ', [userTemplateNumber, ctx.chat.id])
+		return db.promiseExecute('UPDATE TelegramChats SET currentTemplateId=? WHERE TelegramChats.telegramChatId=? ', [result[0].id, ctx.chat.id])
 	})
 	.then(({error}) => {
 		if (!!error)
-			throw new Error (error.code+" - "+error.sqlMessage)
+			throw new Error ("Cannot set active template"+error.code+" - "+error.sqlMessage)
 		
 		return ctx.reply("Using template "+userTemplateNumber)
 	})
@@ -786,5 +816,249 @@ bot.command("use", ctx => {
 
 //END use
 
+
+//BEGIN core
+
+bot.on(
+	['message', 'edited_message'],
+	(ctx, next) => {
+		
+		
+		if (ctx.update[ctx.updateType].reply_to_message)
+			next()
+		
+		debugLog(ctx.updateType)
+		debugLog(ctx.update[ctx.updateType])
+		
+		db.promiseExecute('SELECT te.id, te.userTemplateNumber, te.imageDestination, te.pageId, np.pageType, np.notionPageId FROM Templates AS te JOIN TelegramChats AS tc ON te.id=tc.currentTemplateId JOIN NotionPages AS np ON np.id=te.pageId WHERE tc.telegramChatId=?', [ctx.chat.id])
+		.then(({error, result}) => {
+			
+			if(!!error)
+				throw new Error("Cannot get template settings: "+error.code+" - "+error.sqlMessage)
+			
+			if (!result.length)
+				throw new Error("Couldnt find active template. Set one with  /use")
+			
+			return db.promiseExecute(
+				'SELECT tr.orderNumber, pp.propName, pp.notionPropId, pp.propTypeId, tr.endsWith, tr.defaultValue, tr.urlMetaTemplateRule, u.title, u.imageDestination, u.siteName, u.description, u.type, u.author, pt.type AS propTypeName FROM `TemplateRules` AS tr LEFT OUTER JOIN `NotionPagesProps` AS pp ON pp.id = tr.propId LEFT OUTER JOIN `UrlMetaTemplateRules` AS u ON u.id = tr.urlMetaTemplateRule LEFT OUTER JOIN NotionPropTypes AS pt ON pt.id = pp.propTypeId WHERE tr.templateId=? ORDER BY tr.orderNumber',
+				[result[0].id],
+				{template:result[0]}
+			)
+		})
+		.then(({error, result, state}) => {
+			
+			if(!!error)
+				throw new Error("Cannot get template settings: "+error.code+" - "+error.sqlMessage)
+			
+			if (!result.length)
+				throw new Error("No rules for the active template `"+state.template.userTemplateNumber+"`.")
+			
+			
+			return db.promiseExecute(
+				'SELECT wc.accessToken FROM NotionWorkspacesCredentials AS wc JOIN TelegramChats AS tc ON tc.id=wc.chatId JOIN NotionPages AS np ON np.workspaceId=wc.workspaceId JOIN Templates AS t ON t.pageId = np.id WHERE tc.telegramChatId=? AND t.id=?',
+				[ctx.chat.id, state.template.id],
+				{...state, props:result}
+			)
+		})
+		.then(({error, result, state}) => {
+			
+			if (!!error)
+				throw new Error("Cannot get your access token: "+error.code+" - "+error.sqlMessage)
+			
+			if(result.length !== 1)
+				throw new Error("Cannot get your access token")
+			
+			//https://core.telegram.org/bots/api#message
+			const {
+				text,
+				caption,
+				entities,
+				caption_entities,
+				
+				reply_markup,
+				
+				photo,
+				sticker,
+				/*not yet handled:
+				
+				//all same
+				animation,
+				audio,
+				document,
+				video,
+				video_note,
+				voice,
+				
+				//all separate
+				contact,
+				poll,
+				venue,
+				location,
+				invoice,
+				successful_payment,
+				passport_data,
+				*/
+			} = ctx.update[ctx.updateType]
+			
+			/*
+			if (!!entities || !!caption_entities)
+			//https://core.telegram.org/bots/api#messageentity
+			const {
+				type,	//one of: mention, hashtag, cashtag, bot_command, url, email, phone_number, bold, italic, , underline, strikethrough, code, pre, text_link, text_mention
+				offset,
+				length,
+				url,
+				//not yet handled
+				user,
+				language,
+			} = !!entities ? entities : caption_entities
+			*/
+			
+			
+			var tmpStr = text
+			
+			const b = state.props.map(rule => {
+				
+				var value = undefined
+				
+				var endsWith = rule.endsWith
+				
+				if (!endsWith)
+					value=rule.defaultValue
+				else{
+					var id = -1
+					
+					if (endsWith.match(/".*"/g) !== null) {
+						endsWith = endsWith.replace(removeDoubleQuotes, '$1')
+						id = tmpStr.search(endsWith)
+					}
+					else
+						id = tmpStr.indexOf(endsWith)
+					
+					if (id<0)
+						throw new Error("Couldnt find `"+rule.propName+"` ending with `"+rule.endsWith+"` as specified in rule "+rule.orderNumber)
+					
+					value = tmpStr.slice(0, id)
+					tmpStr = tmpStr.slice(id+endsWith.length-1)
+				}
+				
+				debugLog(rule.propName, " = ", value)
+				
+				return {...rule, value}
+			})
+			.filter(rule => notion.supportedTypes.includes(rule.propTypeId) )	//remove unsupported types
+			
+			const properties = b
+			.filter(rule=>typeof rule.propTypeId === "number")	//remove Content prop (propTypeId is null)
+			.reduce((previous, current) => {
+				
+				const type = current.propTypeName
+				
+				debugLog(current.propTypeName)
+				
+				var newObj = previous
+				
+				var value = {}
+				
+				switch (type){
+					case 'title':
+						value=[{
+							type:'text',
+							text:{
+								content:current.value
+							}
+						}]
+						break;
+					case 'rich_text':
+						value=[{
+							type:"text",
+							plain_text:current.value
+						}]
+						break;
+					case 'number':
+						value=current.value
+						break;
+					case 'select':
+						value={
+							name:current.value
+						}
+						break;
+					case 'multi_select':
+						value=current.value.split(',').map(str=>({name:str.trim()}))
+						break;
+					case 'date':
+						const arr = current.value.split(',').map(str=>{
+							const millis = Date.parse(str)
+							if (isNaN(millis))
+								throw new Error ("Cannot parse date "+str+"\nPlease use a different format")
+							return new Date(millis).toISOString()
+						})
+						value={
+							start:arr[1],
+							end:arr[2]
+						}
+						break;
+					case 'checkbox':
+						value= !!current.value
+						break;
+					case 'url':
+					case 'email':
+					case 'phone_number':
+						value=current.value
+						break;
+				}
+				newObj[current.notionPropId] = {}
+				newObj[current.notionPropId][type] = value
+				
+				return newObj
+			}, {})
+			
+			const children = b
+			.filter(rule => typeof rule.propTypeId !== "number")	//keep content rules
+			.map(({value})=>({
+				object: "block",
+				type: "paragraph",
+				paragraph: {
+					text: [{
+						type: "text",
+						text: {
+							content: value
+						}
+					}]
+				}
+			}))
+			
+// 			debugLog(properties)
+			debugLog(b)
+			
+			if (state.template.pageType === 'db')
+				return notion.client.pages.create({
+					auth:result[0].accessToken,
+					parent:{
+						database_id:state.template.notionPageId,
+					},
+					properties,
+					children,
+// 					icon,
+// 					cover,
+				})
+			else //pageType === 'pg'
+				return notion.client.blocks.append({
+					auth:result[0].accessToken,
+					block_id:state.template.notionPageId,
+					children,
+// 					icon,
+// 					cover,
+				})
+		})
+		.then(res => ctx.replyWithMarkdown("Content saved!\nView in [Notion]("+res.url+")"))
+		.catch(error => {
+			console.warn(error)
+			ctx.reply("Error saving content: "+error)
+		})
+	}
+)
+
+//END core
 export default bot
 export {Markup}
