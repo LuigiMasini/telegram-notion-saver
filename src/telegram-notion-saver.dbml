@@ -1,0 +1,92 @@
+Enum "TelegramChats_chatType_enum" {
+  "private"
+  "group"
+  "supergroup"
+  "channel"
+}
+
+Enum "NotionPages_pageType_enum" {
+  "db"
+  "pg"
+}
+
+Table "TelegramChats" {
+  "id" INT [pk, not null, increment]
+  "telegramChatId" CHAR(10) [unique, not null]
+  "currentTemplateId" INT [ref: - Templates.id]
+  "chatType" TelegramChats_chatType_enum
+  Note: 'Table containing chats info (not users cuz the bot can be added to a grout chat)'
+}
+
+Table "NotionWorkspaces" {
+  "id" INT [pk, not null, increment]
+  "creatorChatId" INT [not null, ref: > TelegramChats.id]
+  "workspaceId" CHAR(36) [unique, not null]
+  "name" CHAR(255)
+  "icon" CHAR(255)
+}
+
+Table "NotionWorkspacesCredentials" {
+  "chatId" INT [not null, ref: > TelegramChats.id]
+  "workspaceId" INT [not null, ref: > NotionWorkspaces.id]
+  "botId" CHAR(36) [not null]
+  "accessToken" CHAR(255) [unique]
+}
+
+Table "NotionPages" {
+  "id" INT [pk, not null, increment]
+  "notionPageId" CHAR(36) [not null]
+  "workspaceId" INT [not null, ref: > NotionWorkspaces.id]
+  "pageType" NotionPages_pageType_enum
+  "icon" CHAR(255)
+  "title" CHAR(255)
+  "chatId" INT [not null, ref: > TelegramChats.id]
+}
+
+Table "NotionPagesProps" {
+  "id" INT [pk, not null, increment]
+  "notionPropId" CHAR(255) //if null not a prop but page content
+  "pageId" INT [not null, ref: > NotionPages.id]
+  "propName" CHAR(255)
+  "propTypeId" INT [ref: > NotionPropTypes.id]
+}
+
+Table "NotionPropTypes" {
+  "id" INT [pk, not null, increment]
+  "type" CHAR(16) [unique, not null]
+}
+
+Table "Templates" {
+  "id" INT [pk, not null, increment]
+  "pageId" INT [ref: > NotionPages.id]
+  "userTemplateNumber" TINYINT [not null]
+  "chatId" INT [not null, ref: > TelegramChats.id]
+  "imageDestination" TINYINT [ref: > ImageDestinations.id]
+}
+
+Table "ImageDestinations" {
+  "id" TINYINT [pk, not null, increment]
+  "destinations" CHAR(10) [not null]
+  Note: 'Table containing possible destinations for an extracted image'
+}
+
+Table "TemplateRules" {
+  "propId" INT [ref: > NotionPagesProps.id]
+  "templateId" INT [not null, ref: > Templates.id]
+  "orderNumber" TINYINT
+  "defaultValue" CHAR(255)
+  "endsWith" CHAR(255) //termination string for extraction, if NULL use defaultValue instead of extracting, if \n to  avoid breaking output use  replace(endsWith, '\n', '\\n') as endsWith
+  "urlMetaTemplateRule" INT [ref: - UrlMetaTemplateRules.id]
+}
+
+
+Table "UrlMetaTemplateRules" {
+  "id" INT [pk, not null, increment]
+  "imageDestination" TINYINT [ref: > ImageDestinations.id]
+  "title" INT [ref: > NotionPagesProps.id]
+  "description" INT [ref: > NotionPagesProps.id]
+  "author" INT [ref: > NotionPagesProps.id]
+  "siteName" INT [ref: > NotionPagesProps.id]
+  "type" INT [ref: > NotionPagesProps.id]
+  Note: 'Table containing rules for URL meta extraction, in what propId to put the extracted content (if NULL discard)'
+}
