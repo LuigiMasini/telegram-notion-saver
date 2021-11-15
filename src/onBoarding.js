@@ -158,11 +158,12 @@ var server = https.createServer(options, function(req, res) {
 			
 			
 			redirect()
-			
+			return
 		}
 	}catch(err){
 		console.warn (err)
 		redirect()
+		return
 	}
 	
 	res.writeHead(400);
