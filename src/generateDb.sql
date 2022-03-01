@@ -1,3 +1,6 @@
+CREATE DATABASE IF NOT EXISTS `telegram-notion-saver` CHARACTER SET utf8mb4;
+use `telegram-notion-saver`;
+
 CREATE TABLE IF NOT EXISTS `TelegramChats` (
   `id` INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
   `telegramChatId` CHAR(10) UNIQUE NOT NULL,

@@ -35,7 +35,7 @@ function authorizeInNotion (ctx, again=false){
 	)
 }
 
-bot.action('stopReauthorization', ctx=>
+bot.action('stopOperation', ctx=>
 		ctx.answerCbQuery()
 		.then(()=>ctx.editMessageText(ctx.callbackQuery.message.text))	//remove keyboard
 		.then(()=>ctx.reply('nevermind'))
@@ -56,7 +56,7 @@ bot.start(ctx=>
 				"You are alredy registered, do you wish to autorize again?",
 				Markup.inlineKeyboard([
 					Markup.button.callback("Yes", "continueReauthorization"),
-					Markup.button.callback("No", "stopReauthorization"),
+					Markup.button.callback("No", "stopOperation"),
 				])
 			)
 		
@@ -142,7 +142,7 @@ const setTextRules = (ctx) => {
 			"`number - property name, string end with, property default value`\n\n"+
 			"Property names for pages are only Title and Content."+
 			"You can leave blank between commas. If `string ends with` is blank, `default value` will be saved in `property name`.\n\n"+
-			"If you need to have commas or escaped characters in a field, wrap it with \", note that *if `ends with` is wrapped in \" it will be used as a regex*\n"+
+			"If you need to have commas or escaped characters in a field, wrap it with \" \", note that *if `ends with` is wrapped in \" \" it will be used as a regex*\n"+
 			"Numbers must be progressive.\n\n"+
 			"If it is a url that you want to parse add\n\n"+
 			"`\[ title, image, site name, description, url, type, author \]`\n\n"+
@@ -259,10 +259,14 @@ bot.action(/registerPG(\d+)/i, ctx=>{
 	
 	const {notionPages, pages, ...userData} = data
 	
-	const {id, icon, properties, object, title} = notionPages[parseInt(ctx.match[1])]
+	var {id, icon, properties, object, title} = notionPages[parseInt(ctx.match[1])]
 	
 	const pageTitle = object === 'database' ? title[0].plain_text : notion.titleFromProps(properties)
 	
+	icon = !!icon ? (icon.type === 'emoji' ? icon.emoji : icon.url) : null;
+
+	console.log([object === "database" ? "db" : "pg", data.workspaceData.workspaceId, id, icon, pageTitle, data.templateData.chatId])
+
 	return db.promiseExecute(
 		'INSERT INTO `NotionPages` (`pageType`, `workspaceId`, `notionPageId`, `icon`, `title`, `chatId`) VALUES (?, ?, ?, ?, ?, ?)',
 		[object === "database" ? "db" : "pg", data.workspaceData.workspaceId, id, icon, pageTitle, data.templateData.chatId]
@@ -372,7 +376,7 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 								case 0: //prop name
 									
 									//prop name to prop id
-									return propNameToId(item.replace(removeDoubleQuotes, '$1'))
+									return !!item ? propNameToId(item.replace(removeDoubleQuotes, '$1')) : null
 									
 								case 1: //ends with
 									
@@ -650,6 +654,22 @@ bot.action('changeRule', ctx =>
 		))
 	  )
 
+bot.action('deleteTemplateConfirmed',  ctx =>
+		ctx.answerCbQuery()
+		.then(()=>ctx.editMessageText("Changing template's page"))
+		.then(()=>preSelectWorkspace(ctx))
+	  )
+
+bot.action('deleteTemplate',  ctx =>
+		ctx.answerCbQuery()
+		.then(()=>ctx.editMessageText(
+			"Do you really want to delete this template?",
+			Markup.inlineKeyboard([
+				Markup.button.callback("Yes", 'deleteTemplateConfirmed'),
+				Markup.button.callback("No", 'stopOperation'),
+			])))
+	  )
+
 const selectTemplate = (templateId, ctx) => {
 	
 	const data = cache.get(ctx.chat.id.toString())
@@ -679,7 +699,8 @@ const selectTemplate = (templateId, ctx) => {
 			Markup.inlineKeyboard([
 				Markup.button.callback("Change page", 'changePage'),
 				Markup.button.callback("Change rules", 'changeRule'),
-				//TODO cancel button
+				Markup.button.callback("Delete Template", 'deleteTemplate'),
+				//TODO exit button ('exit')
 			]))
 	
 	return preSelectWorkspace(ctx)
@@ -711,8 +732,16 @@ const addTemplate = ctx =>{
 	
 	return db.promiseExecute('SELECT id FROM TelegramChats WHERE telegramChatId=?', [ctx.chat.id])
 	.then(({result})=>db.promiseExecute('INSERT INTO Templates (`userTemplateNumber`, `chatId`) VALUES (?, ?)', [userTemplateNumber, result[0].id], {id:result[0].id}))
-	.then(({state})=>db.promiseExecute('SELECT MAX(id) AS id, userTemplateNumber, chatId FROM Templates WHERE chatId=?', [state.id]))
-	.then(({result})=>{
+	.then(({state})=>db.promiseExecute('SELECT MAX(id) AS id, userTemplateNumber, chatId FROM Templates WHERE chatId=?', [state.id], state))
+	.then(({result, state}) => {
+
+		//if first template added by 0user, set as default
+		if ( !templates.length )
+			return db.promiseExecute('UPDATE TelegramChats SET currentTemplateId = ? WHERE id = ?', [ result[0].id, state.id ], result);
+
+		return {state:result}
+	})
+	.then(({state : result})=>{
 		
 		//set array of templates, just one
 		cache.set(ctx.chat.id.toString(), {templates:result})	//NOTE result is already an array thanks to MAX
@@ -832,7 +861,7 @@ bot.on(
 		
 		db.promiseExecute('SELECT te.id, te.userTemplateNumber, te.imageDestination, te.pageId, np.pageType, np.notionPageId FROM Templates AS te JOIN TelegramChats AS tc ON te.id=tc.currentTemplateId JOIN NotionPages AS np ON np.id=te.pageId WHERE tc.telegramChatId=?', [ctx.chat.id])
 		.then(({error, result}) => {
-			
+
 			if(!!error)
 				throw new Error("Cannot get template settings: "+error.code+" - "+error.sqlMessage)
 			
@@ -878,11 +907,11 @@ bot.on(
 				reply_markup,
 				
 				photo,
-				sticker,
 				/*not yet handled:
-				
+
 				//all same
-				animation,
+				sticker,
+				animation (gif),
 				audio,
 				document,
 				video,
@@ -914,8 +943,8 @@ bot.on(
 			} = !!entities ? entities : caption_entities
 			*/
 			
-			
-			var tmpStr = text
+			//TODO consider entities
+			var tmpStr = text || caption || ""
 			
 			const b = state.props.map(rule => {
 				
@@ -954,7 +983,7 @@ bot.on(
 				
 				const type = current.propTypeName
 				
-				debugLog(current.propTypeName)
+// 				debugLog(current.propTypeName)
 				
 				var newObj = previous
 				
@@ -972,11 +1001,14 @@ bot.on(
 					case 'rich_text':
 						value=[{
 							type:"text",
-							plain_text:current.value
+							//plain_text:current.value
+							text: {
+								content:current.value
+							}
 						}]
 						break;
 					case 'number':
-						value=current.value
+						value=parseFloat(current.value)
 						break;
 					case 'select':
 						value={
@@ -1013,43 +1045,65 @@ bot.on(
 				return newObj
 			}, {})
 			
-			const children = b
-			.filter(rule => typeof rule.propTypeId !== "number")	//keep content rules
-			.map(({value})=>({
-				object: "block",
-				type: "paragraph",
-				paragraph: {
-					text: [{
-						type: "text",
-						text: {
-							content: value
-						}
-					}]
-				}
-			}))
-			
-// 			debugLog(properties)
-			debugLog(b)
-			
-			if (state.template.pageType === 'db')
-				return notion.client.pages.create({
-					auth:result[0].accessToken,
-					parent:{
-						database_id:state.template.notionPageId,
-					},
-					properties,
-					children,
-// 					icon,
-// 					cover,
+
+			function EndPreparationAndSend(){
+				const children = b
+				.filter(rule => typeof rule.propTypeId !== "number")	//keep content rules
+				.map(({value})=>({
+					object: "block",
+					type: "paragraph",
+					paragraph: {
+						text: [{
+							type: "text",
+							text: {
+								content: value
+							}
+						}]
+					}
+				}))
+
+				debugLog("properties : ", properties)
+				debugLog("children   : ", children)
+
+				if (state.template.pageType === 'db')
+					return notion.client.pages.create({
+						auth:result[0].accessToken,
+						parent:{
+							type:'database_id',
+							database_id:state.template.notionPageId,
+						},
+						properties,
+						children,
+	// 					icon,
+	// 					cover,
+					})
+				else //pageType === 'pg'
+					return notion.client.pages.create({
+						auth:result[0].accessToken,
+						parent:{
+							type:'page_id',
+							page_id:state.template.notionPageId,
+						},
+						children,
+						properties,
+	// 					icon,
+	// 					cover,
+					})
+			}
+
+
+			if ( !!photo ){	//or any other file
+				//in the array are different sizes, but file_id does not change, we take the first
+				return ctx.tg.getFileLink(photo[0].file_id)
+				.then(fileUrl => {
+					console.log(fileUrl, state.template.imageDestination)
+
+					//EndPreparationAndSend()
 				})
-			else //pageType === 'pg'
-				return notion.client.blocks.append({
-					auth:result[0].accessToken,
-					block_id:state.template.notionPageId,
-					children,
-// 					icon,
-// 					cover,
-				})
+			}
+
+			return EndPreparationAndSend()
+
 		})
 		.then(res => ctx.replyWithMarkdown("Content saved!\nView in [Notion]("+res.url+")"))
 		.catch(error => {
@@ -1060,5 +1114,15 @@ bot.on(
 )
 
 //END core
+
+//BEGIN list
+/*
+bot.command('list', ctx => {
+
+	return db.promiseExecute('SELECT * FROM '
+
+});
+*/
+//END list
 export default bot
 export {Markup}

@@ -15,19 +15,28 @@ function start(){
 	
 	if (db){
 		
-		//launch server
-		onBoardingServer.start(err=>{
-			
-			//check server
-			if (err)
-				throw new Error ("Https server cn't start: "+err)
-			
-			debugLog('https server started')
-			
-			//start bot
-			bot.launch().then(()=>debugLog('telegram bot launched\n'))
-			
-			
+		//dumb query to initialize connection to db
+		//pointless to start everithing if then it crashes at the first query)
+		db.promiseExecute('SELECT max(id) FROM `TelegramChats`').then(
+		({error}) => {
+
+			if (error)
+				throw error
+
+			//launch server
+			onBoardingServer.start(err=>{
+
+				//check server
+				if (err)
+					throw new Error ("Https server cn't start: "+err)
+
+				debugLog('https server started')
+
+				//start bot
+				bot.launch().then(()=>debugLog('telegram bot launched\n'))
+
+
+			})
 		})
 	}
 	else{

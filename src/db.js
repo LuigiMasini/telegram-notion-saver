@@ -9,6 +9,7 @@ const db = mysql.createPool({
 	database: process.env.dbName,
 	port:process.env.dbPort,
 	namedPlaceholders:true,
+	charset:'utf8mb4_general_ci',
 })
 
 function handleError(error, reject, state){

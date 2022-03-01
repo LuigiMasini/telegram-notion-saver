@@ -139,7 +139,7 @@ var server = https.createServer(options, function(req, res) {
 							throw new Error("Error committing changes: "+errC.code+" - "+errC.sqlMessage)
 						
 						//TODO: if user already have templates send different message
-						bot.telegram.sendMessage(telegramChatId, "Good!\n\nNow you can set up a template with /configtemplates")
+						bot.telegram.sendMessage(telegramChatId, "Good!\n\nNow you can set up a template with /config")
 						
 						debugLog("time elapsed: ", Date.now()-t)
 					})
