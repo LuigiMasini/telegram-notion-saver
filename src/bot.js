@@ -1,4 +1,5 @@
 import { Telegraf, Markup } from 'telegraf'
+import parser from 'html-metadata-parser'
 
 import db from './db.js'
 import onBoardingServer from './onBoarding.js'
@@ -15,6 +16,8 @@ const bot = new Telegraf(process.env.telegramBotToken)
 //TODO accorpare codice duplicato in funzioni
 
 //TODO dare nomi meaningful a funzioni
+
+//TODO if parent is a page (not db) how to distinguish between create subpage or block
 
 //BEGIN bot onBoarding
 
@@ -83,6 +86,7 @@ bot.start(ctx=>
 
 //END bot onBoarding
 
+//TODO add ack message like 'nevermind'
 bot.command('cancel', ctx=>cache.del(ctx.chat.id.toString()))
 
 /*TODO
@@ -869,7 +873,7 @@ bot.on(
 				throw new Error("Couldnt find active template. Set one with  /use")
 			
 			return db.promiseExecute(
-				'SELECT tr.orderNumber, pp.propName, pp.notionPropId, pp.propTypeId, tr.endsWith, tr.defaultValue, tr.urlMetaTemplateRule, u.title, u.imageDestination, u.siteName, u.description, u.type, u.author, pt.type AS propTypeName FROM `TemplateRules` AS tr LEFT OUTER JOIN `NotionPagesProps` AS pp ON pp.id = tr.propId LEFT OUTER JOIN `UrlMetaTemplateRules` AS u ON u.id = tr.urlMetaTemplateRule LEFT OUTER JOIN NotionPropTypes AS pt ON pt.id = pp.propTypeId WHERE tr.templateId=? ORDER BY tr.orderNumber',
+				'SELECT tr.orderNumber, tr.propId, pp.propName, pp.notionPropId, pp.propTypeId, pt.type AS propTypeName, tr.endsWith, tr.defaultValue, u.title as urlTitle, u.imageDestination as urlImageDestination, u.siteName as urlSitename, u.description as urlDescription, u.type as urlType, u.author as urlAuthor, u.url as urlDestination FROM `TemplateRules` AS tr LEFT OUTER JOIN `NotionPagesProps` AS pp ON pp.id = tr.propId LEFT OUTER JOIN `UrlMetaTemplateRules` AS u ON u.id = tr.urlMetaTemplateRule LEFT OUTER JOIN NotionPropTypes AS pt ON pt.id = pp.propTypeId WHERE tr.templateId=? ORDER BY tr.orderNumber',
 				[result[0].id],
 				{template:result[0]}
 			)
@@ -904,8 +908,6 @@ bot.on(
 				entities,
 				caption_entities,
 				
-				reply_markup,
-				
 				photo,
 				/*not yet handled:
 
@@ -917,8 +919,9 @@ bot.on(
 				video,
 				video_note,
 				voice,
-				
+
 				//all separate
+				reply_markup,
 				contact,
 				poll,
 				venue,
@@ -929,181 +932,209 @@ bot.on(
 				*/
 			} = ctx.update[ctx.updateType]
 			
-			/*
-			if (!!entities || !!caption_entities)
-			//https://core.telegram.org/bots/api#messageentity
-			const {
-				type,	//one of: mention, hashtag, cashtag, bot_command, url, email, phone_number, bold, italic, , underline, strikethrough, code, pre, text_link, text_mention
-				offset,
-				length,
-				url,
-				//not yet handled
-				user,
-				language,
-			} = !!entities ? entities : caption_entities
-			*/
-			
-			//TODO consider entities
-			var tmpStr = text || caption || ""
-			
-			const b = state.props.map(rule => {
+
+			var ent = []
+
+			if (!!entities || !!caption_entities){
+
+				/*
+				//https://core.telegram.org/bots/api#messageentity
+				const {
+					type,	//one of: mention, hashtag, cashtag, bot_command, url, email, phone_number, bold, italic, , underline, strikethrough, code, pre, text_link, text_mention
+					offset,
+					length,
+					url,
+
+					//not yet handled
+					user,
+					language,
+				}
+				*/
+
+				//TODO support all following entities, and later also bold, italic ecc
+				//atm i think theres no need to handle email, phone_number, hashtag
+				const types = ["mention", "url", "text_link", "text_mention"]
+
+				ent = (!!entities ? entities : caption_entities).filter(({type}) => types.includes(type))
+
+			}
+
+			var origStr = text || caption || ""
+			var tmpStr = origStr
+			var offset = 0	//offset of tmpStr from original string
+			var lastUsedEnt = 0	//id of last used entity
+
+			//map rules to the correspondig content, extracted from message
+			const data = state.props.map(rule => {
 				
 				var value = undefined
-				
+				let valueEnt = {}
+
 				var endsWith = rule.endsWith
 				
 				if (!endsWith)
 					value=rule.defaultValue
 				else{
-					var id = -1
+
+					let start = origStr.indexOf(tmpStr)
+					let end = -1	//end of this field value is id of first occurence of endWith
 					
 					if (endsWith.match(/".*"/g) !== null) {
 						endsWith = endsWith.replace(removeDoubleQuotes, '$1')
-						id = tmpStr.search(endsWith)
+						end = tmpStr.search(endsWith)
 					}
 					else
-						id = tmpStr.indexOf(endsWith)
+						end = tmpStr.indexOf(endsWith)
 					
-					if (id<0)
+					if (end<0)
 						throw new Error("Couldnt find `"+rule.propName+"` ending with `"+rule.endsWith+"` as specified in rule "+rule.orderNumber)
 					
-					value = tmpStr.slice(0, id)
-					tmpStr = tmpStr.slice(id+endsWith.length-1)
+
+
+					value = tmpStr.slice(0, end)
+
+
+					while (ent[lastUsedEnt].offset < offset && lastUsedEnt < ent.length) lastUsedEnt++;
+
+					//NOTE currently only one ent per rule
+					if (lastUsedEnt < ent.length && ent[lastUsedEnt].offset + ent[lastUsedEnt].length < start+end)
+						Object.assign(valueEnt, ent[lastUsedEnt])
+
+
+					tmpStr = tmpStr.slice(end+endsWith.length-1)
+					offset=start+end
 				}
 				
 				debugLog(rule.propName, " = ", value)
 				
-				return {...rule, value}
+				return {...rule, value, valueEnt}
 			})
 			.filter(rule => notion.supportedTypes.includes(rule.propTypeId) )	//remove unsupported types
-			
-			const properties = b
-			.filter(rule=>typeof rule.propTypeId === "number")	//remove Content prop (propTypeId is null)
-			.reduce((previous, current) => {
-				
-				const type = current.propTypeName
-				
-// 				debugLog(current.propTypeName)
-				
-				var newObj = previous
-				
-				var value = {}
-				
-				switch (type){
-					case 'title':
-						value=[{
-							type:'text',
-							text:{
-								content:current.value
-							}
-						}]
-						break;
-					case 'rich_text':
-						value=[{
-							type:"text",
-							//plain_text:current.value
-							text: {
-								content:current.value
-							}
-						}]
-						break;
-					case 'number':
-						value=parseFloat(current.value)
-						break;
-					case 'select':
-						value={
-							name:current.value
-						}
-						break;
-					case 'multi_select':
-						value=current.value.split(',').map(str=>({name:str.trim()}))
-						break;
-					case 'date':
-						const arr = current.value.split(',').map(str=>{
-							const millis = Date.parse(str)
-							if (isNaN(millis))
-								throw new Error ("Cannot parse date "+str+"\nPlease use a different format")
-							return new Date(millis).toISOString()
-						})
-						value={
-							start:arr[1],
-							end:arr[2]
-						}
-						break;
-					case 'checkbox':
-						value= !!current.value
-						break;
-					case 'url':
-					case 'email':
-					case 'phone_number':
-						value=current.value
-						break;
-				}
-				newObj[current.notionPropId] = {}
-				newObj[current.notionPropId][type] = value
-				
-				return newObj
-			}, {})
-			
 
-			function EndPreparationAndSend(){
-				const children = b
-				.filter(rule => typeof rule.propTypeId !== "number")	//keep content rules
-				.map(({value})=>({
-					object: "block",
-					type: "paragraph",
-					paragraph: {
-						text: [{
-							type: "text",
-							text: {
-								content: value
-							}
-						}]
+			//prepare promises for extracting properties
+			const propsPromises = data
+			.filter(rule=>typeof rule.propTypeId === "number")	//keep props, remove Content & waste
+			.map(current => {
+
+					var newObj = {}
+					newObj[current.notionPropId] = {}
+					newObj[current.notionPropId][current.propTypeName] = notion.mapValueToPropObj(current.value, current.propTypeName)
+
+					if (!current.valueEnt.type)
+						return async ()=>newObj
+
+					//else handle entities
+					return async ()=>{
+					//NOTE currently only one entity per rule
+						switch (current.valueEnt.type){
+							case 'url':
+							case 'text_link':
+
+								return await parser.parser(current.valueEnt.url)
+								.then(res => ({
+									//NOTE meta has precedence over og
+									urlTitle : res.meta.title || res.og.title,
+									urlDestination : current.valueEnt.url,
+									urlSitename : res.meta.site_name || res.og.site_name || res.meta.url || res.og.url,	//if no sitename found use url
+									urlDescription: res.meta.description || res.og.description,
+									urlType : res.meta.type || res.og.type,
+								}))
+								.then(urlMetas => {
+
+									const dbPromises = Object.entries(urlMetas)
+									.filter(([key, value]) => typeof current[key] === "number" && !!value )
+									.map(([key, value]) => async () =>
+										db.promiseExecute('SELECT pp.notionPropId, pt.type as propTypeName FROM NotionPagesProps as pp JOIN NotionPropTypes as pt ON pp.propTypeId = pt.id WHERE pp.id=?', [current[key]])
+										.then(({result}) => {
+
+											var urlObj = {}
+											urlObj[result[0].notionPropId] = {}
+											urlObj[result[0].notionPropId][result[0].propTypeName] = notion.mapValueToPropObj(value, result[0].propTypeName)
+
+											return urlObj
+										})
+									)
+
+									return Promise.all(dbPromises.map(it=>it()))
+								})
+								.then(it=> it.reduce( ( completeObj, urlObj ) => Object.assign({}, completeObj, urlObj) , newObj) )		//NOTE this will override props with same notionPropId
+								.catch(err => {
+									console.warn(error)
+									ctx.reply("Error parsing url: "+error)
+									return newObj
+								});
+
+							break;
+						}
 					}
-				}))
-
-				debugLog("properties : ", properties)
-				debugLog("children   : ", children)
-
-				if (state.template.pageType === 'db')
-					return notion.client.pages.create({
-						auth:result[0].accessToken,
-						parent:{
-							type:'database_id',
-							database_id:state.template.notionPageId,
-						},
-						properties,
-						children,
-	// 					icon,
-	// 					cover,
-					})
-				else //pageType === 'pg'
-					return notion.client.pages.create({
-						auth:result[0].accessToken,
-						parent:{
-							type:'page_id',
-							page_id:state.template.notionPageId,
-						},
-						children,
-						properties,
-	// 					icon,
-	// 					cover,
-					})
-			}
-
-
-			if ( !!photo ){	//or any other file
-				//in the array are different sizes, but file_id does not change, we take the first
-				return ctx.tg.getFileLink(photo[0].file_id)
-				.then(fileUrl => {
-					console.log(fileUrl, state.template.imageDestination)
-
-					//EndPreparationAndSend()
 				})
-			}
 
-			return EndPreparationAndSend()
+			//extract promises
+			return Promise.all(propsPromises.map(item => item()))
+			.then(it=> it.reduce( ( allProps, singleProp ) => Object.assign({}, allProps, singleProp) , {}) )		//NOTE this will override props with same notionPropId
+			.then(properties => {
 
+				debugLog(JSON.stringify(properties))
+
+				function EndPreparationAndSend(){
+					const children = data
+					.filter(rule => typeof rule.propTypeId !== "number" && typeof rule.propId === "number")	//keep content, remove props & waste
+					.map(({value})=>({
+						object: "block",
+						type: "paragraph",
+						paragraph: {
+							text: [{
+								type: "text",
+								text: {
+									content: value
+								}
+							}]
+						}
+					}))
+
+					debugLog("properties : ", properties)
+					debugLog("children   : ", children)
+
+					if (state.template.pageType === 'db')
+						return notion.client.pages.create({
+							auth:result[0].accessToken,
+							parent:{
+								type:'database_id',
+								database_id:state.template.notionPageId,
+							},
+							properties,
+							children,
+		// 					icon,
+		// 					cover,
+						})
+					else //pageType === 'pg'
+						return notion.client.pages.create({
+							auth:result[0].accessToken,
+							parent:{
+								type:'page_id',
+								page_id:state.template.notionPageId,
+							},
+							children,
+							properties,
+		// 					icon,
+		// 					cover,
+						})
+				}
+
+
+				if ( !!photo ){	//or any other file
+					//in the array are different sizes, but file_id does not change, we take the first
+					return ctx.tg.getFileLink(photo[0].file_id)
+					.then(fileUrl => {
+						console.log(fileUrl, state.template.imageDestination)
+
+						//EndPreparationAndSend()
+					})
+				}
+
+				return EndPreparationAndSend()
+
+			})
 		})
 		.then(res => ctx.replyWithMarkdown("Content saved!\nView in [Notion]("+res.url+")"))
 		.catch(error => {

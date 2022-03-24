@@ -23,6 +23,8 @@ function start(){
 			if (error)
 				throw error
 
+			debugLog('db connected')
+
 			//launch server
 			onBoardingServer.start(err=>{
 

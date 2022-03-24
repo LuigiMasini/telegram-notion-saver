@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS `TemplateRules` (
 
 CREATE TABLE IF NOT EXISTS `UrlMetaTemplateRules` (
   `id` INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
+  `url` INT,
   `imageDestination` INT,
   `title` INT,
   `description` INT,
@@ -109,6 +110,8 @@ ALTER TABLE `TemplateRules` ADD FOREIGN KEY (`propId`) REFERENCES `NotionPagesPr
 ALTER TABLE `TemplateRules` ADD FOREIGN KEY (`templateId`) REFERENCES `Templates` (`id`);
 
 ALTER TABLE `TemplateRules` ADD FOREIGN KEY (`urlMetaTemplateRule`) REFERENCES `UrlMetaTemplateRules` (`id`);
+
+ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`url`) REFERENCES `NotionPagesProps` (`id`);
 
 ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`imageDestination`) REFERENCES `ImageDestinations` (`id`);
 
