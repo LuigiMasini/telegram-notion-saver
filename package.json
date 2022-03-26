@@ -9,15 +9,16 @@
   "private": false,
   "type": "module",
   "scripts": {
-    "start": "npx nodemon -r dotenv/config src/index.js"
+    "start": "NODE_ENV=development; npx nodemon --exec ./node_modules/.bin/nodenv -- --env .env.$NODE_ENV src/index.js",
+    "start-production": "pm2 --env production start ecosystem.config.cjs"
   },
   "dependencies": {
     "@notionhq/client": "^0.3.2",
-    "dotenv": "^10.0.0",
     "html-metadata-parser": "^2.0.4",
     "http-terminator": "^3.0.3",
     "mysql2": "^2.3.0",
     "node-cache": "^5.1.2",
+    "node-env-run": "^4.0.2",
     "telegraf": "^4.4.2"
   },
   "devDependencies": {

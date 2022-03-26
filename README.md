@@ -1,6 +1,11 @@
 # telegram-notion-saver
 Telegram bot to save content to notion database
 
+You can check it out at [t.me/NotionSaverBot](https://t.me/NotionSaverBot)
+
+> **Still a Work In Progress**
+
+
 ## Yet Another?
 
 Yes, but this bot is both very flexible and powerful: from a single message it can fill
@@ -26,14 +31,15 @@ You can switch between templates with chat buttons or with ```/use n``` where n 
 
 ## Future improvements
 
+- documentation & guides
 - Workspaces & templates can be shared between users
-- support for files, audio, stikers etc
+- support for images, files, audio, stikers, video, etc
 - support for url buttons in forwarded messages
 - multiple templates active at the same time, automatically determine which one to use looking at formats, link domains, forwarded from, is / contains file
 - a template can modify multiple pages (save same content to more than one location with more than one rule)
-- notion properties default value for url metadata
 - in TemplateRule have different order for parsing and writing (may be useful when writing blocks)
 - add possibility to add a sub page block with certain title and content
-- regex support for text splitting (instead of endsWith) and text filtering, like having ABC and you want AB in a prop
+- regex support for text splitting (instead of endsWith) and text filtering, like having ABC and you want AC in a prop
+- more freedom in content
 
-Still a Work In Progress
+> **Still a Work In Progress**
