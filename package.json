@@ -9,7 +9,7 @@
   "private": false,
   "type": "module",
   "scripts": {
-    "start": "NODE_ENV=development; npx nodemon --exec ./node_modules/.bin/nodenv -- --env .env.$NODE_ENV src/index.js",
+    "start": "NODE_ENV=development; nodemon ./node_modules/.bin/nodenv -- --env .env.$NODE_ENV src/index.js",
     "start-production": "pm2 --env production start ecosystem.config.cjs"
   },
   "dependencies": {
@@ -21,7 +21,5 @@
     "node-env-run": "^4.0.2",
     "telegraf": "^4.4.2"
   },
-  "devDependencies": {
-    "ngrok": "^4.2.2"
-  }
+  "devDependencies": {}
 }
