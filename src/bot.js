@@ -332,14 +332,18 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 				
 				try {
 					/*exampe for https://t.me/ebookfreehouse: 
-					0 - , ⁣📚*,
-					1 - title, \n, 
-					2 - , ⁣📚*\n\n✍🏻 Autore: , 
-					3 - Auhor, \n🇮🇹 Lingua: Italiano\n📆 Anno: ,
-					4 - Year, \n📖 Genere: ,
-					5 - tags, \n📝 Fonte: Liber Liber (https://bit.ly/3AYD1eF) \n————————————————————\n\n🖊, 
-					6 - type, , book
-					7 - content, \n@EbookFreeHouse
+
+					0 - , "📚 ",
+					1 - Titolo, "📚\n\n✍🏻 Autore:",
+					2 - Autore, "\n📤 Formato: ",
+					3 - , "\n🇮🇹 Lingua: ",
+					4 - , "\n📆 Anno: ",
+					5 - Anno, "\n📖 Genere: ",
+					6 - Genere, "\n📝 Fonte: ",
+					7 - Link, "\n—", [ , , , , , ]
+					8 - , "𝘐𝘯𝘤𝘪𝘱𝘪𝘵: ",
+					9 - Content, @,
+
 					*/
 					
 					const text = !!ctx.message ? ctx.message.text : ctx.update.edited_message.text
@@ -402,7 +406,7 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 								
 									const urlRules = item.map(propNameToId)
 									
-									return Array(6).fill(null).map((el, key) => !!urlRules[key] ? urlRules[key] : null)
+									return Array(7).fill(null).map((el, key) => !!urlRules[key] ? urlRules[key] : null)
 									
 							}
 						})
@@ -433,7 +437,7 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 								return {}
 							
 							return connection.promiseQuery(
-								'INSERT INTO `UrlMetaTemplateRules` (title, imageDestination, siteName, description, type, author) VALUES ?', 
+								'INSERT INTO `UrlMetaTemplateRules` (title, imageDestination, siteName, description, url, type, author) VALUES ?',
 								[urlRules]
 							)
 						})
