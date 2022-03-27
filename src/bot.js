@@ -948,12 +948,12 @@ bot.on(
 			} = ctx.update[ctx.updateType]
 			
 
-			var Cover = undefined, Icon = undefined, ContentImage = []
+			var Cover = undefined, Icon = undefined, Content = []
 
 			const saveFotoUrl = (fileUrl, destination) => {
 				switch(destination){
 					case 0:
-						ContentImage.push(fileUrl)
+						Content.push({value:fileUrl, type:'image'})
 						break
 					case 1:
 						Cover = fileUrl
@@ -972,7 +972,6 @@ bot.on(
 				ctx.tg.getFileLink(photo[0].file_id)
 				.then(fileUrl => saveurl(fileUrl, state.template.imageDestination))
 			}
-
 
 			var ent = []
 
@@ -1075,13 +1074,13 @@ bot.on(
 								return res
 							})
 							.then(res => ({
-								//NOTE meta has precedence over og
-								urlTitle : res.meta.title || res.og.title,
+								//NOTE og has precedence over meta
+								urlTitle : res.og.title || res.meta.title,
 								urlDestination : current.valueEnt.url,
-								urlSitename : res.meta.site_name || res.og.site_name || res.meta.url || res.og.url,	//if no sitename found use url
-								urlDescription: res.meta.description || res.og.description,
-								urlType : res.meta.type || res.og.type,
-								urlImageDestination: res.meta.image || res.og.image,
+								urlSitename : res.og.site_name || res.meta.site_name,
+								urlDescription: res.og.description || res.meta.description,
+								urlType : res.og.type || res.meta.type,
+								urlImageDestination: res.og.image || res.meta.image,
 							}))
 							.then(urlMetas => {
 
@@ -1094,6 +1093,12 @@ bot.on(
 
 									return db.promiseExecute('SELECT pp.notionPropId, pt.type as propTypeName FROM NotionPagesProps as pp JOIN NotionPropTypes as pt ON pp.propTypeId = pt.id WHERE pp.id=?', [current[key]])
 									.then(({result}) => {
+
+										//if Content instead of prop
+										if (!result.length || !result[0]){
+											Content.push({value, type:'text'})
+											return {}
+										}
 
 										var urlObj = {}
 										urlObj[result[0].notionPropId] = {}
@@ -1132,18 +1137,7 @@ bot.on(
 
 				const children = data
 				.filter(rule => typeof rule.propTypeId !== "number" && typeof rule.propId === "number")	//keep content, remove props & waste
-				.map(({value})=>({
-					object: "block",
-					type: "paragraph",
-					paragraph: {
-						text: [{
-							type: "text",
-							text: {
-								content: value
-							}
-						}]
-					}
-				}))
+				.map(({value})=> notion.mapValueToBlockObj(value, 'text'))
 
 				var pageObj = {
 					auth:result[0].accessToken,
@@ -1173,20 +1167,11 @@ bot.on(
 
 				//WARNING temporary, maybe in future will be ordered following rule order,
 				//not all before the rest of the text content
-				if (ContentImage.length)
+				if (Content.length)
 					pageObj.children = [
 						...pageObj.children,
-						ContentImage
-						.map(value => ({
-							object: "block",
-							type: "image",
-							image: {
-								type: "external",
-								external: {
-									url: value
-								}
-							}
-						})),
+						...Content
+						.map(({value, type}) => notion.mapValueToBlockObj(value, type)),
 					]
 
 

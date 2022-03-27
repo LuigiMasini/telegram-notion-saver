@@ -72,6 +72,42 @@ function mapValueToPropObj (inputValue, propType){
 }
 
 
+function mapValueToBlockObj (inputValue, blockType){
+
+	let value = {}
+
+	switch (blockType){
+		case 'text':
+			value={
+				object: "block",
+				type: "paragraph",
+				paragraph: {
+					text: [{
+						type: "text",
+						text: {
+							content: inputValue
+						}
+					}]
+				}
+			}
+			break
+		case 'image':
+			value = {
+				object: "block",
+				type: "image",
+				image: {
+					type: "external",
+					external: {
+						url: inputValue
+					}
+				}
+			}
+			break
+	}
+
+	return value
+}
+
 const exportObj = {
 	getAccessToken,
 	client:notion,
@@ -79,6 +115,7 @@ const exportObj = {
 	propTypes:["title","rich_text","number","select","multi_select","date","people","files","checkbox","url","email","phone_number","formula","relation","rollup","created_time","created_by","last_edited_time","last_edited_by"],
 	supportedTypes:[0, 1, 2, 3, 4, 5, 8, 9, 10, 11, null],
 	mapValueToPropObj,
+	mapValueToBlockObj,
 }
 
 export default exportObj
