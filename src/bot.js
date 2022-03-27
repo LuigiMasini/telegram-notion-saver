@@ -123,7 +123,7 @@ const setTextRules = (ctx) => {
 		[data.templateData.pageId|| data.pageData.id]		//if op:edit from template, if adding template from page
 	)
 	.then(({result}) => db.promiseExecute(
-			'SELECT tr.orderNumber, pp.propName, tr.endsWith, tr.defaultValue, tr.urlMetaTemplateRule, u.title, u.imageDestination, u.siteName, u.description, u.type, u.author FROM `TemplateRules` AS tr LEFT OUTER JOIN `NotionPagesProps` AS pp ON pp.id = tr.propId LEFT OUTER JOIN `UrlMetaTemplateRules` AS u ON u.id = tr.urlMetaTemplateRule WHERE tr.templateId=? ORDER BY tr.orderNumber',
+			'SELECT tr.orderNumber, pp.propName, tr.endsWith, tr.defaultValue, tr.urlMetaTemplateRule, u.title, u.imageDestination, u.siteName, u.description, u.type, u.author, u.url FROM `TemplateRules` AS tr LEFT OUTER JOIN `NotionPagesProps` AS pp ON pp.id = tr.propId LEFT OUTER JOIN `UrlMetaTemplateRules` AS u ON u.id = tr.urlMetaTemplateRule WHERE tr.templateId=? ORDER BY tr.orderNumber',
 			[data.templateData.id],
 			{props:result}
 		)
@@ -132,12 +132,12 @@ const setTextRules = (ctx) => {
 			( ( !result|| !result.length ) ?
 			"There are no rules yet for this template" :
 			"The rules for this template are:\n\n"+result.map(rule => {
-					const {orderNumber, propName, endsWith, defaultValue, title, description, author, type, siteName, imageDestination} = rule
+					const {orderNumber, propName, endsWith, defaultValue, title, description, author, type, siteName, imageDestination, url} = rule
 					
 					const propIdToName = (propId) => propId === null ? '' : state.props.filter(prop=>prop.id === propId)[0].propName
 					
 					const stdRules = [propName, endsWith, defaultValue]
-					const urlRules = [title, imageDestination, siteName, description, type, author].map(propIdToName)
+					const urlRules = [imageDestination, title, siteName, description, url, type, author].map(propIdToName)
 					
 					return orderNumber+" - "+stdRules.join(', ')+( typeof rule.urlMetaTemplateRule !== 'number' ? '' : ("\\[ "+urlRules.join(', ')+" \]") )		//dunno y but first one wants \\
 				}).join('\n')
@@ -149,8 +149,10 @@ const setTextRules = (ctx) => {
 			"If you need to have commas or escaped characters in a field, wrap it with \" \", note that *if `ends with` is wrapped in \" \" it will be used as a regex*\n"+
 			"Numbers must be progressive.\n\n"+
 			"If it is a url that you want to parse add\n\n"+
-			"`\[ title, image, site name, description, url, type, author \]`\n\n"+
-			"after _`property default value`_ where values between \[\] are all properties names of the selected database where that information extracted from the url will be saved.\n"+
+			"`\[ image, title, site name, description, url, type, author \]`\n\n"+
+			"after _`property default value`_ where values between \[\]:\n"+
+			"- image: 0 to save url cover to content, 1 to cover, 2 to  icon\n"+
+			"- all other are properties names of the selected database where that information extracted from the url will be saved.\n\n"+
 			"Property names are: "+state.props.map(prop=>prop.propName).join(', '),
 			Markup.forceReply()
 		)
@@ -179,13 +181,17 @@ bot.action(/setImageDestination(\d+)/i, ctx=>
 			if (!data)
 				return ctx.reply("We lost your cached data, please start the operation again.\n\nSorry for the incovenience")
 			
-			return db.promiseExecute('UPDATE `Templates` SET `ImageDestination`=? WHERE id=?', [ctx.match[1], data.templateData.id], {data})
+			debugLog(ctx.match[1] === '3' ? null : ctx.match[1])
+
+			return db.promiseExecute('UPDATE `Templates` SET `ImageDestination`=? WHERE id=?', [(ctx.match[1] === '3' ? null : ctx.match[1]), data.templateData.id], {data})
 		})
 		.then(({error, state}) => {
 			if (!!error)
 				throw new Error(error.code+" - "+error.sqlMessage)
 			
-			return ctx.reply("Done: now template "+state.data.templateData.userTemplateNumber+" is saving images to "+["content", "cover", "icon"][ctx.match[1]])
+			const msg = ctx.match[1] === '3' ? " is ignoring images" : " is saving images to "+["content", "cover", "icon"][ctx.match[1]]
+
+			return ctx.reply("Done: now template "+state.data.templateData.userTemplateNumber+msg)
 			.then(()=>state.data)
 		})
 		.then(data => {
@@ -206,9 +212,10 @@ bot.action(/setImageDestination(\d+)/i, ctx=>
 const editImageDestination = ctx => ctx.reply(
 	"In which section of the page do you want me to save images you send me?",
 	Markup.inlineKeyboard([
-		Markup.button.callback("Content", 'setImageDestination0'),
-		Markup.button.callback("Cover",   'setImageDestination1'),
-		Markup.button.callback("Icon",    'setImageDestination2')
+		Markup.button.callback("Content",    'setImageDestination0'),
+		Markup.button.callback("Cover",      'setImageDestination1'),
+		Markup.button.callback("Icon",       'setImageDestination2'),
+		Markup.button.callback("Do not save",'setImageDestination3'),
 		//TODO add cancel button
 	])
 )
@@ -403,10 +410,14 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 								case 3: //url rule
 									
 									//prop names to prop id s
-								
-									const urlRules = item.map(propNameToId)
+
+									var [urlImageDestination, ...urlRules] = item
+
+									urlRules = urlRules.map(propNameToId)
 									
-									return Array(7).fill(null).map((el, key) => !!urlRules[key] ? urlRules[key] : null)
+									urlRules = Array(6).fill(null).map((el, key) => !!urlRules[key] ? urlRules[key] : null)
+
+									return [urlImageDestination, ...urlRules]
 									
 							}
 						})
@@ -437,7 +448,7 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 								return {}
 							
 							return connection.promiseQuery(
-								'INSERT INTO `UrlMetaTemplateRules` (title, imageDestination, siteName, description, url, type, author) VALUES ?',
+								'INSERT INTO `UrlMetaTemplateRules` (imageDestination, title, siteName, description, url, type, author) VALUES ?',
 								[urlRules]
 							)
 						})
@@ -937,6 +948,32 @@ bot.on(
 			} = ctx.update[ctx.updateType]
 			
 
+			var Cover = undefined, Icon = undefined, ContentImage = []
+
+			const saveFotoUrl = (fileUrl, destination) => {
+				switch(destination){
+					case 0:
+						ContentImage.push(fileUrl)
+						break
+					case 1:
+						Cover = fileUrl
+						break
+					case 2:
+						Icon = fileUrl
+						break
+				}
+			}
+
+
+			if ( !!photo ){
+
+				//in the array are different sizes, but file_id does not change, we take the first
+				//NOTE it is a promise but it should have already resolved by the time we get to the end
+				ctx.tg.getFileLink(photo[0].file_id)
+				.then(fileUrl => saveurl(fileUrl, state.template.imageDestination))
+			}
+
+
 			var ent = []
 
 			if (!!entities || !!caption_entities){
@@ -1044,13 +1081,18 @@ bot.on(
 								urlSitename : res.meta.site_name || res.og.site_name || res.meta.url || res.og.url,	//if no sitename found use url
 								urlDescription: res.meta.description || res.og.description,
 								urlType : res.meta.type || res.og.type,
+								urlImageDestination: res.meta.image || res.og.image,
 							}))
 							.then(urlMetas => {
 
 								const dbPromises = Object.entries(urlMetas)
 								.filter(([key, value]) => typeof current[key] === "number" && !!value )
-								.map(([key, value]) => async () =>
-									db.promiseExecute('SELECT pp.notionPropId, pt.type as propTypeName FROM NotionPagesProps as pp JOIN NotionPropTypes as pt ON pp.propTypeId = pt.id WHERE pp.id=?', [current[key]])
+								.map(([key, value]) => async () => {
+
+									if (key === "urlImageDestination")
+										return saveFotoUrl(value, current[key])
+
+									return db.promiseExecute('SELECT pp.notionPropId, pt.type as propTypeName FROM NotionPagesProps as pp JOIN NotionPropTypes as pt ON pp.propTypeId = pt.id WHERE pp.id=?', [current[key]])
 									.then(({result}) => {
 
 										var urlObj = {}
@@ -1059,12 +1101,12 @@ bot.on(
 
 										return urlObj
 									})
-								)
+								})
 
 								return Promise.all(dbPromises.map(it=>it()))
 							})
 							.then(it=> it.reduce( ( completeObj, urlObj ) => Object.assign({}, completeObj, urlObj) , newObj) )		//NOTE this will override props with same notionPropId
-							.catch(err => {
+							.catch(error => {
 								console.warn(error)
 								ctx.reply("Error parsing url: "+error)
 								return newObj
@@ -1088,65 +1130,75 @@ bot.on(
 			.then(it=> it.reduce( ( allProps, singleProp ) => Object.assign({}, allProps, singleProp) , {}) )		//NOTE this will override props with same notionPropId
 			.then(properties => {
 
-				debugLog(JSON.stringify(properties))
+				const children = data
+				.filter(rule => typeof rule.propTypeId !== "number" && typeof rule.propId === "number")	//keep content, remove props & waste
+				.map(({value})=>({
+					object: "block",
+					type: "paragraph",
+					paragraph: {
+						text: [{
+							type: "text",
+							text: {
+								content: value
+							}
+						}]
+					}
+				}))
 
-				function EndPreparationAndSend(){
-					const children = data
-					.filter(rule => typeof rule.propTypeId !== "number" && typeof rule.propId === "number")	//keep content, remove props & waste
-					.map(({value})=>({
-						object: "block",
-						type: "paragraph",
-						paragraph: {
-							text: [{
-								type: "text",
-								text: {
-									content: value
+				var pageObj = {
+					auth:result[0].accessToken,
+					parent:{
+						type: state.template.pageType === 'db' ? 'database_id' : 'page_id',
+						database_id:state.template.notionPageId,
+					},
+					properties,
+					children,
+				}
+
+				if (!!Icon)
+					pageObj.icon = {
+						type : "external",
+						external : {
+							url: Icon,
+						},
+					}
+
+				if (!!Cover)
+					pageObj.cover = {
+						type : "external",
+						external : {
+							url: Cover,
+						},
+					}
+
+				//WARNING temporary, maybe in future will be ordered following rule order,
+				//not all before the rest of the text content
+				if (ContentImage.length)
+					pageObj.children = [
+						...pageObj.children,
+						ContentImage
+						.map(value => ({
+							object: "block",
+							type: "image",
+							image: {
+								type: "external",
+								external: {
+									url: value
 								}
-							}]
-						}
-					}))
-
-					debugLog("properties : ", properties)
-					debugLog("children   : ", children)
-
-					if (state.template.pageType === 'db')
-						return notion.client.pages.create({
-							auth:result[0].accessToken,
-							parent:{
-								type:'database_id',
-								database_id:state.template.notionPageId,
-							},
-							properties,
-							children,
-		// 					icon,
-		// 					cover,
-						})
-					else //pageType === 'pg'
-						return notion.client.pages.create({
-							auth:result[0].accessToken,
-							parent:{
-								type:'page_id',
-								page_id:state.template.notionPageId,
-							},
-							children,
-							properties,
-		// 					icon,
-		// 					cover,
-						})
-				}
+							}
+						})),
+					]
 
 
-				if ( !!photo ){	//or any other file
-					//in the array are different sizes, but file_id does not change, we take the first
-					return ctx.tg.getFileLink(photo[0].file_id)
-					.then(fileUrl => {
-						console.log(fileUrl, state.template.imageDestination)
+				debugLog("\n\n--------------------------\n\n")
+				debugLog("properties  : ", properties)
+				debugLog("children    : ", pageObj.children)
+				debugLog("cover       : ", pageObj.cover)
+				debugLog("icon        : ", pageObj.icon)
+				debugLog("\n\n--------------------------\n\n")
 
-						//EndPreparationAndSend()
-					})
-				}
 
-				return EndPreparationAndSend()
+				return notion.client.pages.create(pageObj)
 
 			})
 		})

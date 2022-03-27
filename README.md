@@ -13,9 +13,9 @@ properties and content of a new database page, so that you no longer have to com
 later to notion and adjust the saved content. Just set the rules once.
 
 > **IMPORTANT**
-> currently only has good supports for adding pages to a database
+> currently only has supports for adding pages to a database or subpages to a page.
 > 
-> adding block to pages works but not very flexible, if you find it not suitable for you send a pull request or switch to another telegram to notion bot
+> if you find it not suitable for you send a pull request or switch to another telegram to notion bot
 
 ## How it works
 
