@@ -1000,8 +1000,10 @@ bot.on(
 
 					while (ent[lastUsedEnt].offset < offset && lastUsedEnt < ent.length) lastUsedEnt++;
 
+					debugLog(lastUsedEnt, start, end)
+
 					//NOTE currently only one ent per rule
-					if (lastUsedEnt < ent.length && ent[lastUsedEnt].offset + ent[lastUsedEnt].length < start+end)
+					if (lastUsedEnt < ent.length && ent[lastUsedEnt].offset + ent[lastUsedEnt].length <= start+end)
 						Object.assign(valueEnt, ent[lastUsedEnt])
 
 
@@ -1029,44 +1031,52 @@ bot.on(
 
 					//else handle entities
 					return async ()=>{
-					//NOTE currently only one entity per rule
+
+						const UrlParser = (url) => parser.parser(url)
+							.then(res => {
+								debugLog("parsed url",res)
+								return res
+							})
+							.then(res => ({
+								//NOTE meta has precedence over og
+								urlTitle : res.meta.title || res.og.title,
+								urlDestination : current.valueEnt.url,
+								urlSitename : res.meta.site_name || res.og.site_name || res.meta.url || res.og.url,	//if no sitename found use url
+								urlDescription: res.meta.description || res.og.description,
+								urlType : res.meta.type || res.og.type,
+							}))
+							.then(urlMetas => {
+
+								const dbPromises = Object.entries(urlMetas)
+								.filter(([key, value]) => typeof current[key] === "number" && !!value )
+								.map(([key, value]) => async () =>
+									db.promiseExecute('SELECT pp.notionPropId, pt.type as propTypeName FROM NotionPagesProps as pp JOIN NotionPropTypes as pt ON pp.propTypeId = pt.id WHERE pp.id=?', [current[key]])
+									.then(({result}) => {
+
+										var urlObj = {}
+										urlObj[result[0].notionPropId] = {}
+										urlObj[result[0].notionPropId][result[0].propTypeName] = notion.mapValueToPropObj(value, result[0].propTypeName)
+
+										return urlObj
+									})
+								)
+
+								return Promise.all(dbPromises.map(it=>it()))
+							})
+							.then(it=> it.reduce( ( completeObj, urlObj ) => Object.assign({}, completeObj, urlObj) , newObj) )		//NOTE this will override props with same notionPropId
+							.catch(err => {
+								console.warn(error)
+								ctx.reply("Error parsing url: "+error)
+								return newObj
+							});
+
+
+						//NOTE currently only one entity per rule
 						switch (current.valueEnt.type){
 							case 'url':
+								return await UrlParser(current.value)
 							case 'text_link':
-
-								return await parser.parser(current.valueEnt.url)
-								.then(res => ({
-									//NOTE meta has precedence over og
-									urlTitle : res.meta.title || res.og.title,
-									urlDestination : current.valueEnt.url,
-									urlSitename : res.meta.site_name || res.og.site_name || res.meta.url || res.og.url,	//if no sitename found use url
-									urlDescription: res.meta.description || res.og.description,
-									urlType : res.meta.type || res.og.type,
-								}))
-								.then(urlMetas => {
-
-									const dbPromises = Object.entries(urlMetas)
-									.filter(([key, value]) => typeof current[key] === "number" && !!value )
-									.map(([key, value]) => async () =>
-										db.promiseExecute('SELECT pp.notionPropId, pt.type as propTypeName FROM NotionPagesProps as pp JOIN NotionPropTypes as pt ON pp.propTypeId = pt.id WHERE pp.id=?', [current[key]])
-										.then(({result}) => {
-
-											var urlObj = {}
-											urlObj[result[0].notionPropId] = {}
-											urlObj[result[0].notionPropId][result[0].propTypeName] = notion.mapValueToPropObj(value, result[0].propTypeName)
-
-											return urlObj
-										})
-									)
-
-									return Promise.all(dbPromises.map(it=>it()))
-								})
-								.then(it=> it.reduce( ( completeObj, urlObj ) => Object.assign({}, completeObj, urlObj) , newObj) )		//NOTE this will override props with same notionPropId
-								.catch(err => {
-									console.warn(error)
-									ctx.reply("Error parsing url: "+error)
-									return newObj
-								});
+								return await UrlParser(current.valueEnt.url)
 
 							break;
 						}
