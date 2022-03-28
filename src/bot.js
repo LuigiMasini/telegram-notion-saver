@@ -137,9 +137,9 @@ const setTextRules = (ctx) => {
 					const propIdToName = (propId) => propId === null ? '' : state.props.filter(prop=>prop.id === propId)[0].propName
 					
 					const stdRules = [propName, endsWith, defaultValue]
-					const urlRules = [imageDestination, title, siteName, description, url, type, author].map(propIdToName)
+					const urlRules = [title, siteName, description, url, type, author].map(propIdToName)
 					
-					return orderNumber+" - "+stdRules.join(', ')+( typeof rule.urlMetaTemplateRule !== 'number' ? '' : ("\\[ "+urlRules.join(', ')+" \]") )		//dunno y but first one wants \\
+					return orderNumber+" - "+stdRules.join(', ')+( typeof rule.urlMetaTemplateRule !== 'number' ? '' : ("\\[ "+imageDestination+', '+urlRules.join(', ')+" \]") )		//dunno y but first one wants \\
 				}).join('\n')
 			)+
 			"\n\nTo change the rules reply to this message with the new set of rules that will replace the old ones (if any). Use the same format:\n\n"+
@@ -165,6 +165,10 @@ const setTextRules = (ctx) => {
 			})
 		})
 	)
+	.catch(err => {
+		console.warn(err)
+		ctx.reply("Error getting teplate rules: "+err+"\n\nYou can try again later or report the incident on GitHub.")
+	})
 }
 
 bot.action('editTextRules', ctx => ctx.answerCbQuery()
@@ -276,7 +280,7 @@ bot.action(/registerPG(\d+)/i, ctx=>{
 	
 	icon = !!icon ? (icon.type === 'emoji' ? icon.emoji : icon.url) : null;
 
-	console.log([object === "database" ? "db" : "pg", data.workspaceData.workspaceId, id, icon, pageTitle, data.templateData.chatId])
+	debugLog([object === "database" ? "db" : "pg", data.workspaceData.workspaceId, id, icon, pageTitle, data.templateData.chatId])
 
 	return db.promiseExecute(
 		'INSERT INTO `NotionPages` (`pageType`, `workspaceId`, `notionPageId`, `icon`, `title`, `chatId`) VALUES (?, ?, ?, ?, ?, ?)',
