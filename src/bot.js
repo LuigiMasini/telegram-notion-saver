@@ -409,7 +409,7 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 									if (!!item && item.length > 255)
 										throw new Error("Maximum length for `default value` is 255 characters")
 									
-									return item && item.replace(removeDoubleQuotes, '$1')
+									return item
 									
 								case 3: //url rule
 									
@@ -440,13 +440,13 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 							throw new Error("Cannot begin transaction: "+transactionError.code+" - "+transactionError.sqlMessage)
 						
 						return connection.promiseExecute(
-							'DELETE FROM UrlMetaTemplateRules USING UrlMetaTemplateRules, TemplateRules WHERE TemplateRules.templateId=? AND TemplateRules.urlMetaTemplateRule=UrlMetaTemplateRules.id',
+							'DELETE TemplateRules.*, UrlMetaTemplateRules.* FROM TemplateRules LEFT OUTER JOIN UrlMetaTemplateRules ON UrlMetaTemplateRules.id = TemplateRules.urlMetaTemplateRule WHERE TemplateRules.templateId=?',
 							[data.templateData.id]
 						)
 						.then(({error}) => {
 							
 							if (!!error)
-								throw new Error("Cannot delete old url rules: "+error.code+" - "+error.sqlMessage)
+								throw new Error("Cannot delete old rules: "+error.code+" - "+error.sqlMessage)
 							
 							if (!urlRules|| !urlRules.length)
 								return {}
@@ -459,13 +459,7 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 						.then(({error}) => {
 							if (!!error)
 								throw new Error("Cannot save url rules: "+error.code+" - "+error.sqlMessage)
-							
-							return connection.promiseExecute('DELETE FROM TemplateRules WHERE templateId=?', [data.templateData.id])
-						})
-						.then(({error}) => {
-							if (!!error)
-								throw Error("Cannot delete old rules: "+error.code+" - "+error.sqlMessage)
-							
+
 							return connection.promiseExecute('SELECT MAX(id) AS id from `UrlMetaTemplateRules`', [])
 						})
 						.then(({result}) =>{
@@ -833,7 +827,11 @@ const activateTemplate = (userTemplateNumber, ctx) =>
 		ctx.reply("Cannot use template "+userTemplateNumber+" : "+err+"\n\nYou can try again later, search the error or report the incident on GitHub.")
 })
 
-bot.action(/activateTemplate(\d+)/i, ctx => activateTemplate(ctx.match[1], ctx))
+bot.action(/activateTemplate(\d+)/i, ctx =>
+		ctx.answerCbQuery()
+		.then(()=>ctx.editMessageText(ctx.callbackQuery.message.text))	//remove keyboard
+		.then(()=>activateTemplate(ctx.match[1], ctx))
+	)
 
 bot.command("use", ctx => {
 	
@@ -1017,7 +1015,7 @@ bot.on(
 				var endsWith = rule.endsWith
 				
 				if (!endsWith)
-					value=rule.defaultValue
+					value=rule.defaultValue.replace(removeDoubleQuotes, '$1')
 				else{
 
 					let start = origStr.indexOf(tmpStr)
