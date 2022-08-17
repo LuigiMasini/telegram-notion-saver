@@ -837,7 +837,7 @@ bot.command("use", ctx => {
 	
 	const userTemplateNumber = ctx.message.text.split('/use ')[1]
 	
-	return db.promiseExecute('SELECT userTemplateNumber FROM Templates as t JOIN TelegramChats as tc ON tc.id = t.chatId WHERE tc.telegramChatId=?', [ctx.chat.id])
+	return db.promiseExecute('SELECT t.userTemplateNumber, np.title FROM Templates as t JOIN TelegramChats as tc ON tc.id = t.chatId JOIN NotionPages as np on np.id = t.pageId WHERE tc.telegramChatId=?', [ctx.chat.id])
 	.then(({error, result}) => {
 		if (!!error)
 			throw new Error ("Cannot get your templates: "+error.code+" - "+error.sqlMessage)
@@ -846,13 +846,15 @@ bot.command("use", ctx => {
 			.then(() => addTemplate(ctx))
 			.then(() => activateTemplate(0, ctx))
 		
+		//if a valid template number specified, select it directly
 		if (typeof userTemplateNumber === "string" && result.map(({userTemplateNumber}) => userTemplateNumber+"").includes(userTemplateNumber))
 			return activateTemplate(userTemplateNumber, ctx)
 		
+		//else ask wich one to use
 		return ctx.reply(
 			"Choose wich template to use (if you dont remember them you can use /list):",
 			Markup.inlineKeyboard([
-				...result.map(({userTemplateNumber})=>Markup.button.callback(""+userTemplateNumber, "activateTemplate"+userTemplateNumber)),
+				...result.map(({userTemplateNumber, title})=>Markup.button.callback(`${userTemplateNumber} - ${title}`, "activateTemplate"+userTemplateNumber)),
 				Markup.button.callback('+', 'addTemplate'),
 				//TODO add cancel button
 			])
