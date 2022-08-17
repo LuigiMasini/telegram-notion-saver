@@ -1046,11 +1046,12 @@ bot.on(
 					if (lastUsedEnt < ent.length && ent[lastUsedEnt].offset + ent[lastUsedEnt].length <= start+end)
 						Object.assign(valueEnt, ent[lastUsedEnt])
 
+					debugLog(valueEnt)
 
 					tmpStr = tmpStr.slice(end+endsWith.length-1)
 					offset=start+end
 				}
-				
+
 				debugLog(rule.propName, " = ", value)
 				
 				return {...rule, value, valueEnt}
@@ -1059,12 +1060,15 @@ bot.on(
 
 			//prepare promises for extracting properties
 			const propsPromises = data
-			.filter(rule=>typeof rule.propTypeId === "number")	//keep props, remove Content & waste
+			.filter(rule=> typeof rule.propTypeId === "number" || !!rule.valueEnt.type)	//keep items that will be notion props directly or indirectly (rule with entity but without property_name)
 			.map(current => {
 
 					var newObj = {}
-					newObj[current.notionPropId] = {}
-					newObj[current.notionPropId][current.propTypeName] = notion.mapValueToPropObj(current.value, current.propTypeName)
+
+					if (current.notionPropId){
+						newObj[current.notionPropId] = {}
+						newObj[current.notionPropId][current.propTypeName] = notion.mapValueToPropObj(current.value, current.propTypeName)
+					}
 
 					if (!current.valueEnt.type)
 						return async ()=>newObj
