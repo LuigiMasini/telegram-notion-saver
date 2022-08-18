@@ -328,8 +328,8 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 	
 	if (!!data &&
 	    (
-		( !!ctx.message && !!ctx.message.reply_to_message && ctx.message.reply_to_message.message_id === data.message_id )|| 
-		( !!ctx.update && !!ctx.update.edited_message && !!ctx.update.edited_message.reply_to_message && ctx.update.edited_message.reply_to_message.message_id === data.ed_message_id ) 
+		( ctx.message?.reply_to_message?.message_id === data.message_id ) ||
+		( ctx.update?.edited_message?.reply_to_message?.message_id === data.ed_message_id )
 	    ) 
 	) {
 		
@@ -882,6 +882,8 @@ bot.on(
 		debugLog(ctx.updateType)
 		debugLog(ctx.update[ctx.updateType])
 		
+		const extraReplyOptions = {reply_to_message_id : ctx.message.message_id}
+
 		db.promiseExecute('SELECT te.id, te.userTemplateNumber, te.imageDestination, te.pageId, np.pageType, np.notionPageId FROM Templates AS te JOIN TelegramChats AS tc ON te.id=tc.currentTemplateId JOIN NotionPages AS np ON np.id=te.pageId WHERE tc.telegramChatId=?', [ctx.chat.id])
 		.then(({error, result}) => {
 
@@ -1195,10 +1197,10 @@ bot.on(
 
 			})
 		})
-		.then(res => ctx.replyWithMarkdown("Content saved!\nView in [Notion]("+res.url+")"))
+		.then(res => ctx.replyWithMarkdown("Content saved!\nView in [Notion]("+res.url+")", extraReplyOptions))
 		.catch(error => {
 			console.warn(error)
-			ctx.reply("Error saving content: "+error)
+			ctx.reply(`Error saving content: ${error}`, extraReplyOptions)
 		})
 	}
 )
