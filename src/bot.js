@@ -331,11 +331,11 @@ bot.action(/registerPG(\d+)/i, ctx=>{
 bot.on(['text', 'edited_message'], (ctx, next)=>{
 	
 	const data = cache.get(ctx.chat.id.toString())
-	
+
 	if (!!data &&
 	    (
-		( ctx.message?.reply_to_message?.message_id === data.message_id ) ||
-		( ctx.update?.edited_message?.reply_to_message?.message_id === data.ed_message_id )
+		( data.message_id && ctx.message?.reply_to_message?.message_id === data.message_id ) ||
+		( data.ed_message_id && ctx.update?.edited_message?.reply_to_message?.message_id === data.ed_message_id )
 	    ) 
 	) {
 		
@@ -796,7 +796,10 @@ const addTemplate = ctx =>{
 bot.action('addTemplate', ctx=>
 		ctx.answerCbQuery()
 		.then(()=>ctx.editMessageText(ctx.callbackQuery.message.text))	//remove keyboard
-		.then(()=>addTemplate(ctx))
+		.then(()=>{
+			cache.set(ctx.chat.id.toString(), {templates:[]})
+			return addTemplate(ctx)
+		})
 	  )
 
 bot.command('config', ctx=>
@@ -806,11 +809,9 @@ bot.command('config', ctx=>
 	db.promiseExecute('SELECT t.id, t.userTemplateNumber, t.pageId, tc.id AS chatId, t.pageId FROM Templates AS t LEFT OUTER JOIN TelegramChats AS tc ON tc.id = t.chatId WHERE tc.telegramChatId=? ORDER BY t.userTemplateNumber',[ctx.chat.id])
 	.then(({result})=>{
 		
-		
-
 		//set array of templates 
 		cache.set(ctx.chat.id.toString(), {templates:result})
-		
+
 		//if no templates add one:
 		if (!result.length)
 			return ctx.reply("No existing template found, adding a new one")
@@ -869,7 +870,12 @@ bot.command("use", ctx => {
 			throw new Error ("Cannot get your templates: "+error.code+" - "+error.sqlMessage)
 		if (!result.length)
 			return ctx.reply("No template found, adding a new one (use /cancel to abort)")
-			.then(() => addTemplate(ctx))
+			.then(() => {
+
+				cache.set(ctx.chat.id.toString(), {templates:[]})
+
+				return addTemplate(ctx)
+			})
 			.then(() => activateTemplate(0, ctx))
 		
 		//if a valid template number specified, select it directly
