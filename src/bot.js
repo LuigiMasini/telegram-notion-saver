@@ -19,18 +19,31 @@ const bot = new Telegraf(process.env.telegramBotToken)
 
 //TODO if parent is a page (not db) how to distinguish between create subpage or block
 
+function cancel (ctx) {
+	cache.del( ctx.chat.id.toString() )
+	return ctx.reply('Current operation cancelled')
+}
+
+bot.command('cancel', cancel)
+
+bot.action('stopOperation', ctx=>
+	ctx.answerCbQuery()
+	.then(()=>ctx.editMessageText(ctx.callbackQuery.message.text))	//remove keyboard
+	.then(()=>cancel(ctx))
+	)
+
 //BEGIN bot onBoarding
 
 function authorizeInNotion (ctx, again=false){
-	
+
 	const notionAuthorizationUrl = new URL ("https://api.notion.com/v1/oauth/authorize")
-	
+
 	notionAuthorizationUrl.searchParams.append("client_id", process.env.notionOAuthClientId)
 	notionAuthorizationUrl.searchParams.append("redirect_uri", onBoardingServer.redirect_uri)
 	notionAuthorizationUrl.searchParams.append("response_type", "code")
 	notionAuthorizationUrl.searchParams.append("state", '"'+ctx.chat.id+'"')
 	notionAuthorizationUrl.searchParams.append("owner", "user")
-	
+
 	return ctx.reply( (again ? "A" : "Fisrt thing, a")+"uthorize the integration in Notion and select which pages to make available to this bot",
 		Markup.inlineKeyboard([
 			Markup.button.url("Authorize in Notion", notionAuthorizationUrl),
@@ -38,11 +51,6 @@ function authorizeInNotion (ctx, again=false){
 	)
 }
 
-bot.action('stopOperation', ctx=>
-		ctx.answerCbQuery()
-		.then(()=>ctx.editMessageText(ctx.callbackQuery.message.text))	//remove keyboard
-		.then(()=>ctx.reply('nevermind'))
-	  )
 
 bot.action('continueReauthorization', ctx=>
 		ctx.answerCbQuery()
@@ -53,7 +61,7 @@ bot.action('continueReauthorization', ctx=>
 bot.start(ctx=>
 	db.promiseExecute('INSERT INTO `TelegramChats` (`telegramChatId`,`chatType`) VALUES (?, ?)', [ctx.chat.id, ctx.chat.type])
 	.then(({error, result})=>{
-		
+
 		if (error && error.code === 'ER_DUP_ENTRY')
 			return ctx.reply(
 				"You are alredy registered, do you wish to autorize again?",
@@ -62,12 +70,12 @@ bot.start(ctx=>
 					Markup.button.callback("No", "stopOperation"),
 				])
 			)
-		
+
 		//NOTE probably there are other errors that should be handled, but 10911 sql errors to read in documentation is a bit too much  https://dev.mysql.com/doc/mysql-errors/8.0/en/server-error-reference.html
 		//finger crossed
 		if (!!error)
 			throw new Error("Error registering telegram chat: "+err.code+" - "+err.sqlMessage)
-		
+
 		return ctx.reply(
 			"Hey There!\n"+
 			"This is the most advanced (at the moment) Telegram to Notion bot.\n"+
@@ -75,19 +83,17 @@ bot.start(ctx=>
 			"Let's get started!"
 		)
 		.then(()=>authorizeInNotion(ctx))
-		
+
 	})
 	.catch(err=>{
 		console.warn(err)
 		return ctx.reply(err)
 	})
-	
+
 )
 
 //END bot onBoarding
 
-//TODO add ack message like 'nevermind'
-bot.command('cancel', ctx=>cache.del(ctx.chat.id.toString()))
 
 /*TODO
 instead of 
@@ -489,8 +495,9 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 							if (!!error)
 								throw new Error("Cannot commit rules: "+error.code+" - "+error.sqlMessage)
 							
-							const {replyFor, message_id, props, ed_message_id, ...databis} = data
-							cache.set(ctx.chat.id.toString(), databis)
+// 							const {replyFor, message_id, props, ed_message_id, ...databis} = data
+// 							cache.set(ctx.chat.id.toString(), databis)
+							cache.del(ctx.chat.id.toString())
 							
 							return ctx.reply("All good, understood new rules and updated.")
 						})
@@ -673,8 +680,27 @@ bot.action('changeRule', ctx =>
 
 bot.action('deleteTemplateConfirmed',  ctx =>
 		ctx.answerCbQuery()
-		.then(()=>ctx.editMessageText("Changing template's page"))
-		.then(()=>preSelectWorkspace(ctx))
+		.then(()=>ctx.editMessageText(ctx.callbackQuery.message.text))	//remove keyboard
+		.then(()=>{
+			const data = cache.get(ctx.chat.id.toString())
+
+			if (!data)
+				return ctx.reply("We lost your cached data, please start the operation again.\n\nSorry for the incovenience")
+
+			//delete a template and its rules (via sql foreign key ON DELETE CASCADE)
+			return db.promiseExecute('DELETE FROM Templates WHERE id=?', [data.templateData.id], data.templateData)
+		})
+		.then(({error, state})=>{
+
+			if (error)
+				throw new Error (`Cannot delete template '${state.userTemplateNumber}': ${error.code} - ${error.sqlMessage}`)
+
+			return ctx.editMessageText(`Template '${state.userTemplateNumber}' deleted`)
+		})
+		.catch(err => {
+			console.warn(err)
+			ctx.editMessageText(err+"\n\nYou can try again later, search the error or report the incident on GitHub.")
+		})
 	  )
 
 bot.action('deleteTemplate',  ctx =>
