@@ -3,6 +3,9 @@ import { Client as NotionClient } from "@notionhq/client"
 import db from './db.js'
 import debugLog from './debug.js'
 
+// https://stackoverflow.com/a/7033662
+const chunkString = (str, length) => str.match(new RegExp(`(.|[\r\n]){1,${length}}`, 'g'));
+
 //creating a single NotionClient for every user
 //do not set a global token but pass it as parameter to every endpoint method
 //2021-09-21 it is an undocumented method parameter, could break ¯\_(ツ)_/¯
@@ -82,12 +85,17 @@ function mapValueToBlockObj (inputValue, blockType){
 				object: "block",
 				type: "paragraph",
 				paragraph: {
-					text: [{
-						type: "text",
-						text: {
-							content: inputValue
-						}
-					}]
+					text:
+						inputValue
+						.split('\n')
+						.map(string => chunkString(inputValue, 2000))
+						.flat()
+						.map(str => ({
+							type: "text",
+							text: {
+								content: str,
+							},
+						})),
 				}
 			}
 			break

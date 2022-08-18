@@ -1123,7 +1123,7 @@ bot.on(
 							.then(it=> it.reduce( ( completeObj, urlObj ) => Object.assign({}, completeObj, urlObj) , newObj) )		//NOTE this will override props with same notionPropId
 							.catch(error => {
 								console.warn(error)
-								ctx.reply("Error parsing url: "+error)
+								ctx.reply(`Error parsing url: ${error}`, extraReplyOptions)
 								return newObj
 							});
 
@@ -1131,7 +1131,7 @@ bot.on(
 						//NOTE currently only one entity per rule
 						switch (current.valueEnt.type){
 							case 'url':
-								return await UrlParser(current.value)
+								return await UrlParser(current.value.trim())
 							case 'text_link':
 								return await UrlParser(current.valueEnt.url)
 
