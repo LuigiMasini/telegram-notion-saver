@@ -1201,7 +1201,8 @@ bot.on(
 
 				const children = data
 				.filter(rule => typeof rule.propTypeId !== "number" && typeof rule.propId === "number")	//keep content, remove props & waste
-				.map(({value})=> notion.mapValueToBlockObj(value, 'text'))
+				.map(({value})=> notion.mapValueToBlockObjs(value, 'text'))
+				.flat()
 
 				var pageObj = {
 					auth:result[0].accessToken,
@@ -1235,13 +1236,17 @@ bot.on(
 					pageObj.children = [
 						...pageObj.children,
 						...Content
-						.map(({value, type}) => notion.mapValueToBlockObj(value, type)),
+						.map(({value, type}) => notion.mapValueToBlockObjs(value, type))
+						.flat(),
 					]
 
 
 				debugLog("\n\n--------------------------\n\n")
 				debugLog("properties  : ", properties)
 				debugLog("children    : ", pageObj.children)
+
+				pageObj.children.forEach(({paragraph}) => debugLog(paragraph.text))
+
 				debugLog("cover       : ", pageObj.cover)
 				debugLog("icon        : ", pageObj.icon)
 				debugLog("\n\n--------------------------\n\n")

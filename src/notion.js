@@ -4,7 +4,7 @@ import db from './db.js'
 import debugLog from './debug.js'
 
 // https://stackoverflow.com/a/7033662
-const chunkString = (str, length) => str.match(new RegExp(`(.|[\r\n]){1,${length}}`, 'g'));
+const chunkString = (str, length) => str.match(new RegExp(`(.|[\r\n]){1,${length}}`, 'g')) || ['\n'];
 
 //creating a single NotionClient for every user
 //do not set a global token but pass it as parameter to every endpoint method
@@ -75,29 +75,43 @@ function mapValueToPropObj (inputValue, propType){
 }
 
 
-function mapValueToBlockObj (inputValue, blockType){
+function mapValueToBlockObjs (inputValue, blockType){
 
 	let value = {}
 
 	switch (blockType){
 		case 'text':
-			value={
-				object: "block",
-				type: "paragraph",
-				paragraph: {
-					text:
-						inputValue
-						.split('\n')
-						.map(string => chunkString(inputValue, 2000))
-						.flat()
-						.map(str => ({
-							type: "text",
-							text: {
-								content: str,
-							},
-						})),
-				}
+
+
+			const textBlocks = inputValue
+			.split('\n')
+			.map(string => chunkString(string, 2000))
+			.flat()
+			.map(str => ({
+				type: "text",
+				text: {
+					content: str,
+				},
+			}))
+
+			const paragraphs = []
+			const chunkSize = 100
+
+			//https://stackoverflow.com/a/8495740
+			for (let i=0; i<textBlocks.length; i += chunkSize) {
+
+				const chunk = textBlocks.slice(i, i + chunkSize);
+				paragraphs.push({
+					object: "block",
+					type: "paragraph",
+					paragraph: {
+						text:chunk,
+					}
+				})
 			}
+
+			value=paragraphs;
+
 			break
 		case 'image':
 			value = {
@@ -123,7 +137,7 @@ const exportObj = {
 	propTypes:["title","rich_text","number","select","multi_select","date","people","files","checkbox","url","email","phone_number","formula","relation","rollup","created_time","created_by","last_edited_time","last_edited_by"],
 	supportedTypes:[0, 1, 2, 3, 4, 5, 8, 9, 10, 11, null],
 	mapValueToPropObj,
-	mapValueToBlockObj,
+	mapValueToBlockObjs,
 }
 
 export default exportObj
