@@ -1,3 +1,15 @@
+ALTER TABLE `TemplateRules` ADD COLUMN `id` INT PRIMARY KEY NOT NULL AUTO_INCREMENT;
+ALTER TABLE `UrlMetaTemplateRules` ADD COLUMN `ruleId` INT;
+
+UPDATE `UrlMetaTemplateRules` AS u, ( SELECT t.`id`, t.urlMetaTemplateRule FROM TemplateRules AS t JOIN UrlMetaTemplateRules as U ON t.urlMetaTemplateRule = U.`id` ) AS d SET u.ruleId = d.`id` WHERE d.urlMetaTemplateRule = u.`id`;
+DELETE FROM `UrlMetaTemplateRules` WHERE ruleId IS NULL;
+
+ALTER TABLE `TemplateRules` DROP FOREIGN KEY TemplateRules_ibfk_3, DROP COLUMN urlMetaTemplateRule;
+ALTER TABLE `UrlMetaTemplateRules` DROP PRIMARY KEY, DROP COLUMN `id`;
+ALTER TABLE `UrlMetaTemplateRules` MODIFY COLUMN `ruleId` INT PRIMARY KEY NOT NULL;
+
+ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`ruleId`) REFERENCES `TemplateRules` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
 ALTER TABLE `NotionWorkspacesCredentials` DROP FOREIGN KEY NotionWorkspacesCredentials_ibfk_1;
 ALTER TABLE `NotionWorkspacesCredentials` ADD FOREIGN KEY (`chatId`) REFERENCES `TelegramChats` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `NotionWorkspacesCredentials` DROP FOREIGN KEY NotionWorkspacesCredentials_ibfk_2;
@@ -24,8 +36,6 @@ ALTER TABLE `TemplateRules` DROP FOREIGN KEY TemplateRules_ibfk_1;
 ALTER TABLE `TemplateRules` ADD FOREIGN KEY (`propId`) REFERENCES `NotionPagesProps` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE `TemplateRules` DROP FOREIGN KEY TemplateRules_ibfk_2;
 ALTER TABLE `TemplateRules` ADD FOREIGN KEY (`templateId`) REFERENCES `Templates` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE `TemplateRules` DROP FOREIGN KEY TemplateRules_ibfk_3;
-ALTER TABLE `TemplateRules` ADD FOREIGN KEY (`urlMetaTemplateRule`) REFERENCES `UrlMetaTemplateRules` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 ALTER TABLE `UrlMetaTemplateRules` DROP FOREIGN KEY UrlMetaTemplateRules_ibfk_1;
 ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`imageDestination`) REFERENCES `ImageDestinations` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;

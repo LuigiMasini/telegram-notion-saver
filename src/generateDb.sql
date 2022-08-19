@@ -64,16 +64,16 @@ CREATE TABLE IF NOT EXISTS `ImageDestinations` (
 );
 
 CREATE TABLE IF NOT EXISTS `TemplateRules` (
+  `id` INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
   `propId` INT,
   `templateId` INT NOT NULL,
   `orderNumber` TINYINT,
   `defaultValue` CHAR(255),
-  `endsWith` CHAR(255),
-  `urlMetaTemplateRule` INT
+  `endsWith` CHAR(255)
 );
 
 CREATE TABLE IF NOT EXISTS `UrlMetaTemplateRules` (
-  `id` INT PRIMARY KEY NOT NULL AUTO_INCREMENT,
+  `ruleId` INT PRIMARY KEY NOT NULL,
   `url` INT,
   `imageDestination` INT,
   `title` INT,
@@ -83,47 +83,54 @@ CREATE TABLE IF NOT EXISTS `UrlMetaTemplateRules` (
   `type` INT
 );
 
-ALTER TABLE `TelegramChats` ADD FOREIGN KEY (`currentTemplateId`) REFERENCES `Templates` (`id`);
+ALTER TABLE `TelegramChats` ADD FOREIGN KEY (`currentTemplateId`) REFERENCES `Templates` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
-ALTER TABLE `NotionWorkspaces` ADD FOREIGN KEY (`creatorChatId`) REFERENCES `TelegramChats` (`id`);
+ALTER TABLE `NotionWorkspaces` ADD FOREIGN KEY (`creatorChatId`) REFERENCES `TelegramChats` (`id`) ON UPDATE CASCADE;
 
-ALTER TABLE `NotionWorkspacesCredentials` ADD FOREIGN KEY (`chatId`) REFERENCES `TelegramChats` (`id`);
+ALTER TABLE `NotionWorkspacesCredentials` ADD FOREIGN KEY (`chatId`) REFERENCES `TelegramChats` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE `NotionWorkspacesCredentials` ADD FOREIGN KEY (`workspaceId`) REFERENCES `NotionWorkspaces` (`id`);
+ALTER TABLE `NotionWorkspacesCredentials` ADD FOREIGN KEY (`workspaceId`) REFERENCES `NotionWorkspaces` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE `NotionPages` ADD FOREIGN KEY (`workspaceId`) REFERENCES `NotionWorkspaces` (`id`);
+ALTER TABLE `NotionPages` ADD FOREIGN KEY (`workspaceId`) REFERENCES `NotionWorkspaces` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE `NotionPages` ADD FOREIGN KEY (`chatId`) REFERENCES `TelegramChats` (`id`);
+ALTER TABLE `NotionPages` ADD FOREIGN KEY (`chatId`) REFERENCES `TelegramChats` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE `NotionPagesProps` ADD FOREIGN KEY (`pageId`) REFERENCES `NotionPages` (`id`);
+ALTER TABLE `NotionPagesProps` ADD FOREIGN KEY (`pageId`) REFERENCES `NotionPages` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE `NotionPagesProps` ADD FOREIGN KEY (`propTypeId`) REFERENCES `NotionPropTypes` (`id`);
+ALTER TABLE `NotionPagesProps` ADD FOREIGN KEY (`propTypeId`) REFERENCES `NotionPropTypes` (`id`) ON UPDATE CASCADE;
 
-ALTER TABLE `Templates` ADD FOREIGN KEY (`pageId`) REFERENCES `NotionPages` (`id`);
+ALTER TABLE `Templates` ADD FOREIGN KEY (`pageId`) REFERENCES `NotionPages` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
-ALTER TABLE `Templates` ADD FOREIGN KEY (`imageDestination`) REFERENCES `ImageDestinations` (`id`);
+ALTER TABLE `Templates` ADD FOREIGN KEY (`imageDestination`) REFERENCES `ImageDestinations` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
-ALTER TABLE `Templates` ADD FOREIGN KEY (`chatId`) REFERENCES `TelegramChats` (`id`);
+ALTER TABLE `Templates` ADD FOREIGN KEY (`chatId`) REFERENCES `TelegramChats` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE `TemplateRules` ADD FOREIGN KEY (`propId`) REFERENCES `NotionPagesProps` (`id`);
+ALTER TABLE `TemplateRules` ADD FOREIGN KEY (`propId`) REFERENCES `NotionPagesProps` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
-ALTER TABLE `TemplateRules` ADD FOREIGN KEY (`templateId`) REFERENCES `Templates` (`id`);
+ALTER TABLE `TemplateRules` ADD FOREIGN KEY (`templateId`) REFERENCES `Templates` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE `TemplateRules` ADD FOREIGN KEY (`urlMetaTemplateRule`) REFERENCES `UrlMetaTemplateRules` (`id`);
 
-ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`url`) REFERENCES `NotionPagesProps` (`id`);
+-- ALTER TABLE `TemplateRules` ADD FOREIGN KEY (`urlMetaTemplateRule`) REFERENCES `UrlMetaTemplateRules` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
-ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`imageDestination`) REFERENCES `ImageDestinations` (`id`);
+-- ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`id`) REFERENCES `TemplateRules` (`urlMetaTemplateRule`) ON DELETE CASCADE;
 
-ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`title`) REFERENCES `NotionPagesProps` (`id`);
 
-ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`description`) REFERENCES `NotionPagesProps` (`id`);
+ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`ruleId`) REFERENCES `TemplateRules` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
-ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`author`) REFERENCES `NotionPagesProps` (`id`);
 
-ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`siteName`) REFERENCES `NotionPagesProps` (`id`);
+ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`imageDestination`) REFERENCES `ImageDestinations` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
-ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`type`) REFERENCES `NotionPagesProps` (`id`);
+ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`title`) REFERENCES `NotionPagesProps` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`description`) REFERENCES `NotionPagesProps` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`author`) REFERENCES `NotionPagesProps` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`siteName`) REFERENCES `NotionPagesProps` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`type`) REFERENCES `NotionPagesProps` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`url`) REFERENCES `NotionPagesProps` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 ALTER TABLE `TelegramChats` COMMENT = "Table containing chats info (not users cuz the bot can be added to a grout chat)";
 

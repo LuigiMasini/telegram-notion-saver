@@ -129,7 +129,7 @@ const setTextRules = (ctx) => {
 		[data.templateData.pageId|| data.pageData.id]		//if op:edit from template, if adding template from page
 	)
 	.then(({result}) => db.promiseExecute(
-			'SELECT tr.orderNumber, pp.propName, tr.endsWith, tr.defaultValue, tr.urlMetaTemplateRule, u.title, u.imageDestination, u.siteName, u.description, u.type, u.author, u.url FROM `TemplateRules` AS tr LEFT OUTER JOIN `NotionPagesProps` AS pp ON pp.id = tr.propId LEFT OUTER JOIN `UrlMetaTemplateRules` AS u ON u.id = tr.urlMetaTemplateRule WHERE tr.templateId=? ORDER BY tr.orderNumber',
+			'SELECT tr.orderNumber, pp.propName, tr.endsWith, tr.defaultValue, u.ruleId, u.title, u.imageDestination, u.siteName, u.description, u.type, u.author, u.url FROM `TemplateRules` AS tr LEFT OUTER JOIN `NotionPagesProps` AS pp ON pp.id = tr.propId LEFT OUTER JOIN `UrlMetaTemplateRules` AS u ON u.ruleId = tr.id WHERE tr.templateId=? ORDER BY tr.orderNumber',
 			[data.templateData.id],
 			{props:result}
 		)
@@ -145,7 +145,7 @@ const setTextRules = (ctx) => {
 					const stdRules = [propName, endsWith, defaultValue]
 					const urlRules = [title, siteName, description, url, type, author].map(propIdToName)
 					
-					return orderNumber+" - "+stdRules.join(', ')+( typeof rule.urlMetaTemplateRule !== 'number' ? '' : ("\\[ "+imageDestination+', '+urlRules.join(', ')+" \]") )		//dunno y but first one wants \\
+					return orderNumber+" - "+stdRules.join(', ')+( typeof rule.ruleId !== 'number' ? '' : ("\\[ "+imageDestination+', '+urlRules.join(', ')+" \]") )		//dunno y but first one wants \\
 				}).join('\n')
 			)+
 			"\n\nTo change the rules reply to this message with the new set of rules that will replace the old ones (if any). Use the same format:\n\n"+
@@ -446,48 +446,69 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 							throw new Error("Cannot begin transaction: "+transactionError.code+" - "+transactionError.sqlMessage)
 						
 						return connection.promiseExecute(
-							'DELETE TemplateRules.*, UrlMetaTemplateRules.* FROM TemplateRules LEFT OUTER JOIN UrlMetaTemplateRules ON UrlMetaTemplateRules.id = TemplateRules.urlMetaTemplateRule WHERE TemplateRules.templateId=?',
+							'DELETE TemplateRules.*, UrlMetaTemplateRules.* FROM TemplateRules LEFT OUTER JOIN UrlMetaTemplateRules ON UrlMetaTemplateRules.ruleId = TemplateRules.id WHERE TemplateRules.templateId=?',
 							[data.templateData.id]
 						)
 						.then(({error}) => {
 							
 							if (!!error)
 								throw new Error("Cannot delete old rules: "+error.code+" - "+error.sqlMessage)
-							
-							if (!urlRules|| !urlRules.length)
-								return {}
-							
-							return connection.promiseQuery(
-								'INSERT INTO `UrlMetaTemplateRules` (imageDestination, title, siteName, description, url, type, author) VALUES ?',
-								[urlRules]
-							)
-						})
-						.then(({error}) => {
-							if (!!error)
-								throw new Error("Cannot save url rules: "+error.code+" - "+error.sqlMessage)
 
-							return connection.promiseExecute('SELECT MAX(id) AS id from `UrlMetaTemplateRules`', [])
-						})
-						.then(({result}) =>{
-							
-							const ruleHasUrlOptions = rules.map(rule => rule.length === 4 ? 1 : 0)
-							
-							const a = [rules.map((rule, key, rules) => [ data.templateData.id, key, ...rule.slice(0,3), rule.length === 4 ? ( result[0].id - urlRules.length + ruleHasUrlOptions.slice(0, key+1).reduce((a,b) => a+b, 0) ) : null ])]
-							
+							debugLog("Deleted old rules")
+
+							const a = rules.map((rule, key) => [ data.templateData.id, key, ...rule.slice(0,3) ])
+
+							debugLog(a)
+
 							return connection.promiseQuery(
-								'INSERT INTO `TemplateRules` (templateId, orderNumber, propId, endsWith, defaultValue, urlMetaTemplateRule) VALUES ?',
-								a
+								'INSERT INTO `TemplateRules` (templateId, orderNumber, propId, endsWith, defaultValue) VALUES ?',
+								[a]
 							)
 						})
 						.then(({error}) => {
-							
+
 							if (!!error){
-								
+
 								if (error.code === 'ER_WRONG_VALUE_COUNT_ON_ROW')
 									throw new Error("Cannot parse rules: missing a comma?")
 								throw new Error("Cannot save rules: "+error.code+" - "+error.sqlMessage)
 							}
+
+							debugLog("Inserted new rules")
+
+							return connection.promiseExecute('SELECT MAX(id) AS id from `TemplateRules`', [])
+						})
+						.then(({result}) =>{
+
+							if (!urlRules|| !urlRules.length)
+								return {}
+
+							const firstRuleWithUrlId = result[0].id + 1 - rules.length
+							const ruleWithUrlIds = []
+
+							let i=0;
+							while (i < rules.length) {
+								rules[i].length === 4 && ruleWithUrlIds.push(firstRuleWithUrlId + i);
+								i++;
+							}
+
+							const a = urlRules.map((rule, key) => [ ruleWithUrlIds[key] , ...rule])
+
+
+							debugLog(a)
+
+							return connection.promiseQuery(
+								'INSERT INTO `UrlMetaTemplateRules` (ruleId, imageDestination, title, siteName, description, url, type, author) VALUES ?',
+								[a]
+							)
+						})
+						.then(({error}) => {
 							
+							if (!!error)
+								throw new Error("Cannot save url rules: "+error.code+" - "+error.sqlMessage)
+							
+							debugLog("Inserted new url rules")
+
 							return  connection.commitPromise(connection)
 						})
 						.then((error) =>{
@@ -759,6 +780,7 @@ bot.action(/selectTP(\d+)/i, ctx=>{
 	cache.set(ctx.chat.id.toString(), {...data, op:'edit'})
 	
 	return ctx.answerCbQuery()
+	.then(()=>ctx.editMessageText(`Editing template '${ data.templates.filter(tp => tp.id === parseInt(ctx.match[1]))[0].userTemplateNumber }'`))	//remove keyboard
 	.then(()=>selectTemplate(parseInt(ctx.match[1]), ctx))
 })
 
@@ -926,7 +948,7 @@ bot.on(
 				throw new Error("Couldnt find active template. Set one with  /use")
 			
 			return db.promiseExecute(
-				'SELECT tr.orderNumber, tr.propId, pp.propName, pp.notionPropId, pp.propTypeId, pt.type AS propTypeName, tr.endsWith, tr.defaultValue, u.title as urlTitle, u.imageDestination as urlImageDestination, u.siteName as urlSitename, u.description as urlDescription, u.type as urlType, u.author as urlAuthor, u.url as urlDestination FROM `TemplateRules` AS tr LEFT OUTER JOIN `NotionPagesProps` AS pp ON pp.id = tr.propId LEFT OUTER JOIN `UrlMetaTemplateRules` AS u ON u.id = tr.urlMetaTemplateRule LEFT OUTER JOIN NotionPropTypes AS pt ON pt.id = pp.propTypeId WHERE tr.templateId=? ORDER BY tr.orderNumber',
+				'SELECT tr.orderNumber, tr.propId, pp.propName, pp.notionPropId, pp.propTypeId, pt.type AS propTypeName, tr.endsWith, tr.defaultValue, u.title as urlTitle, u.imageDestination as urlImageDestination, u.siteName as urlSitename, u.description as urlDescription, u.type as urlType, u.author as urlAuthor, u.url as urlDestination FROM `TemplateRules` AS tr LEFT OUTER JOIN `NotionPagesProps` AS pp ON pp.id = tr.propId LEFT OUTER JOIN `UrlMetaTemplateRules` AS u ON u.ruleId = tr.id LEFT OUTER JOIN NotionPropTypes AS pt ON pt.id = pp.propTypeId WHERE tr.templateId=? ORDER BY tr.orderNumber',
 				[result[0].id],
 				{template:result[0]}
 			)
