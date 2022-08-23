@@ -566,6 +566,11 @@ bot.on(['text', 'edited_message'], (ctx, next)=>{
 						)
 					}
 				})
+				.catch(err => {
+					console.warn(err)
+					debugLog(ctx.message)
+					ctx.reply("Error adding page: "+err+"\n\nYou can try again later, search the error or report the incident on GitHub.")
+				})
 				break;
 		}
 	}

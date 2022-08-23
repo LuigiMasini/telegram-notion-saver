@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS `NotionWorkspacesCredentials` (
   `chatId` INT NOT NULL,
   `workspaceId` INT NOT NULL,
   `botId` CHAR(36) PRIMARY KEY NOT NULL,
-  `accessToken` CHAR(255) UNIQUE
+  `accessToken` CHAR(255)
 );
 
 CREATE TABLE IF NOT EXISTS `NotionPages` (
