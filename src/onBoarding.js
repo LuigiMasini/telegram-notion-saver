@@ -123,14 +123,28 @@ var server = https.createServer(options, function(req, res) {
 						return state.connection.promiseExecute(
 							'INSERT INTO `NotionWorkspacesCredentials` (`chatId`, `workspaceId`, `botId`, `accessToken`) VALUES (?, ?, ?, ?)',
 							[state.chatId, result[0].id, response.bot_id, response.access_token],
-							{...state}
+							{...state, workspaceId:result[0].id}
 						)
 					})
 					.then(({error, state})=>{
 						
 						if (error && error.code !== 'ER_DUP_ENTRY')
-							throw new Error("Error registering workspace: "+error.code+" - "+error.sqlMessage)
+							throw new Error("Error registering workspace credentials: "+error.code+" - "+error.sqlMessage)
 						
+						if (error.code === 'ER_DUP_ENTRY')
+							return state.connection.promiseExecute(
+								'UPDATE `NotionWorkspacesCredentials` SET `accessToken`=? WHERE `chatId`=? AND `workspaceId`=?',
+								[response.access_token, state.chatId, state.workspaceId],
+								{...state}
+							)
+							.then(({error, state})=>{
+
+								if (error && error.code !== 'ER_DUP_ENTRY')
+									throw new Error("Error updating workspace credentials: "+error.code+" - "+error.sqlMessage)
+
+								return state.connection.commitPromise(state.connection)
+							})
+
 						return state.connection.commitPromise(state.connection)
 					})
 					.then(errC=>{

@@ -15,6 +15,8 @@ ALTER TABLE `NotionWorkspacesCredentials` ADD FOREIGN KEY (`chatId`) REFERENCES 
 ALTER TABLE `NotionWorkspacesCredentials` DROP FOREIGN KEY NotionWorkspacesCredentials_ibfk_2;
 ALTER TABLE `NotionWorkspacesCredentials` ADD FOREIGN KEY (`workspaceId`) REFERENCES `NotionWorkspaces` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
+ALTER TABLE `NotionWorkspacesCredentials` ADD PRIMARY KEY (`botId`);
+
 ALTER TABLE `NotionPages` DROP FOREIGN KEY NotionPages_ibfk_1;
 ALTER TABLE `NotionPages` ADD FOREIGN KEY (`workspaceId`) REFERENCES `NotionWorkspaces` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `NotionPages` DROP FOREIGN KEY NotionPages_ibfk_2;

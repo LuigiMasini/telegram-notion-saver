@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS `NotionWorkspaces` (
 CREATE TABLE IF NOT EXISTS `NotionWorkspacesCredentials` (
   `chatId` INT NOT NULL,
   `workspaceId` INT NOT NULL,
-  `botId` CHAR(36) NOT NULL,
+  `botId` CHAR(36) PRIMARY KEY NOT NULL,
   `accessToken` CHAR(255) UNIQUE
 );
 
@@ -108,12 +108,6 @@ ALTER TABLE `Templates` ADD FOREIGN KEY (`chatId`) REFERENCES `TelegramChats` (`
 ALTER TABLE `TemplateRules` ADD FOREIGN KEY (`propId`) REFERENCES `NotionPagesProps` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 ALTER TABLE `TemplateRules` ADD FOREIGN KEY (`templateId`) REFERENCES `Templates` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-
-
--- ALTER TABLE `TemplateRules` ADD FOREIGN KEY (`urlMetaTemplateRule`) REFERENCES `UrlMetaTemplateRules` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
-
--- ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`id`) REFERENCES `TemplateRules` (`urlMetaTemplateRule`) ON DELETE CASCADE;
-
 
 ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`ruleId`) REFERENCES `TemplateRules` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
