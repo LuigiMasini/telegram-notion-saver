@@ -10,6 +10,13 @@ ALTER TABLE `UrlMetaTemplateRules` MODIFY COLUMN `ruleId` INT PRIMARY KEY NOT NU
 
 ALTER TABLE `UrlMetaTemplateRules` ADD FOREIGN KEY (`ruleId`) REFERENCES `TemplateRules` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
+ALTER TABLE `TelegramChats` DROP FOREIGN KEY TelegramChats_ibfk_1;
+ALTER TABLE `TelegramChats` ADD FOREIGN KEY (`currentTemplateId`) REFERENCES `Templates` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE `NotionWorkspaces` DROP FOREIGN KEY NotionWorkspaces_ibfk_1;
+ALTER TABLE `NotionWorkspaces` CHANGE COLUMN `creatorChatId` `creatorChatId` INT;
+ALTER TABLE `NotionWorkspaces` ADD FOREIGN KEY (`creatorChatId`) REFERENCES `TelegramChats` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
 ALTER TABLE `NotionWorkspacesCredentials` DROP FOREIGN KEY NotionWorkspacesCredentials_ibfk_1;
 ALTER TABLE `NotionWorkspacesCredentials` ADD FOREIGN KEY (`chatId`) REFERENCES `TelegramChats` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE `NotionWorkspacesCredentials` DROP FOREIGN KEY NotionWorkspacesCredentials_ibfk_2;

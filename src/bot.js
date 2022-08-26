@@ -1015,7 +1015,10 @@ bot.on(
 
 			var Cover = undefined, Icon = undefined, Content = []
 
-			const saveFotoUrl = (fileUrl, destination) => {
+			const saveFotoUrl = (url, destination) => {
+
+				const fileUrl = new URL(url).toString()
+
 				switch(destination){
 					case 0:
 						Content.push({value:fileUrl, type:'image'})
