@@ -43,7 +43,7 @@ function mapValueToPropObj (inputValue, propType){
 			break;
 		case 'select':
 			value={
-				name:inputValue
+				name:inputValue.replaceAll(',', '-')  //commas not alloweds
 			}
 			break;
 		case 'multi_select':
