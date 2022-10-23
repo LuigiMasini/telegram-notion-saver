@@ -14,7 +14,7 @@ const options = {
 	cert: fs.readFileSync(process.env.sslCertFile),
 };
 
-const redirect_uri = process.env.notionRedirectUri + ':' + process.env.port
+const redirect_uri = process.env.notionRedirectUri
 
 
 function rfc6749ErrorMessageComposer(obj){
