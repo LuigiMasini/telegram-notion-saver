@@ -12,6 +12,7 @@ import debugLog from './debug.js'
 const options = {
 	key: fs.readFileSync(process.env.sslKeyFile),
 	cert: fs.readFileSync(process.env.sslCertFile),
+	passphrase: process.env.sslKeyPassphrase,
 };
 
 const redirect_uri = process.env.notionRedirectUri
